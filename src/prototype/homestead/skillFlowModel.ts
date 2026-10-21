@@ -24,6 +24,7 @@ export type SkillStep =
   | 'conversionApproved'
   | 'manifest'
   | 'dryRun'
+  | 'inputCheck'
   | 'uploads'
   | 'push'
   | 'release'
@@ -135,19 +136,25 @@ export function requiredUploads(session: SkillSession): SkillUpload[] {
       kind: 'model',
       reason: 'instance'
     })
-  const assets: SkillUpload[] =
-    session.scenario === 'assets'
+  const assets: SkillUpload[] = [
+    { name: 'reference.png', size: '8 MB', kind: 'asset', reason: 'image' },
+    ...(session.scenario === 'assets'
       ? [
           {
-            name: 'reference.png',
-            size: '8 MB',
-            kind: 'asset',
-            reason: 'image'
+            name: 'motion.mp4',
+            size: '24 MB',
+            kind: 'asset' as const,
+            reason: 'video' as const
           },
-          { name: 'motion.mp4', size: '24 MB', kind: 'asset', reason: 'video' },
-          { name: 'voice.wav', size: '4 MB', kind: 'asset', reason: 'audio' }
+          {
+            name: 'voice.wav',
+            size: '4 MB',
+            kind: 'asset' as const,
+            reason: 'audio' as const
+          }
         ]
-      : []
+      : [])
+  ]
   return [...models, ...assets]
 }
 

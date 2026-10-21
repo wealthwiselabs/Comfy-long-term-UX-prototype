@@ -8,7 +8,13 @@ const { t } = useI18n()
 <template>
   <section class="space-y-4 rounded-xl border border-border-subtle p-4">
     <h3 class="text-sm font-medium">
-      {{ t('homestead.skillFlow.uploadTitle') }}
+      {{
+        t(
+          flow.pendingFiles.some((file) => file.kind === 'model')
+            ? 'homestead.skillFlow.uploadTitle'
+            : 'homestead.skillFlow.inputUploadTitle'
+        )
+      }}
     </h3>
     <p class="text-xs leading-5 text-muted-foreground">
       {{
@@ -38,7 +44,13 @@ const { t } = useI18n()
               {{ t(`homestead.skillFlow.fileReason.${file.reason}`) }}
             </p>
             <p class="text-xs leading-5 text-muted-foreground">
-              {{ t(`homestead.skillFlow.destination.${file.kind}`) }}
+              {{
+                t(
+                  file.kind === 'asset' && flow.session?.route !== 'stock'
+                    ? 'homestead.skillFlow.destination.deploymentAsset'
+                    : `homestead.skillFlow.destination.${file.kind}`
+                )
+              }}
             </p>
           </li>
         </ul>

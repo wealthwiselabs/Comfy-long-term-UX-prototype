@@ -35,6 +35,12 @@ describe('Agent route and approval decisions', () => {
     expect(s.agentOpen).toBe(true)
     await vi.runAllTimersAsync()
     expect(
+      screen.getByRole('heading', { name: 'Upload these input assets?' })
+    ).toBeInTheDocument()
+    expect(screen.queryByText('Run one test job')).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Upload assets' }))
+    await vi.runAllTimersAsync()
+    expect(
       screen.getByText('Check existing workspace Builds')
     ).toBeInTheDocument()
     expect(screen.getByText('Run one test job')).toBeInTheDocument()
@@ -47,6 +53,10 @@ describe('Agent route and approval decisions', () => {
   })
 
   it('retains an approved named-update plan when reopening the same workflow', async () => {
+    const user = userEvent.setup({
+      advanceTimers: vi.advanceTimersByTime,
+      applyAccept: false
+    })
     const s = useHomesteadStore()
     s.activeId = 'matte'
     s.failure = 'build'
@@ -74,6 +84,8 @@ describe('Agent route and approval decisions', () => {
       gpu: 'B200',
       region: 'us-west'
     })
+    await user.click(screen.getByRole('button', { name: 'Upload assets' }))
+    await vi.runAllTimersAsync()
     expect(
       screen.getByText('Simulated workflow test passed')
     ).toBeInTheDocument()
@@ -146,6 +158,12 @@ describe('Agent route and approval decisions', () => {
     await user.click(screen.getByRole('button', { name: 'Upload models' }))
     await vi.runAllTimersAsync()
     expect(
+      screen.getByRole('heading', { name: 'Upload these input assets?' })
+    ).toBeInTheDocument()
+    expect(screen.queryByText('Push build')).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Upload assets' }))
+    await vi.runAllTimersAsync()
+    expect(
       screen.getByText('Simulated workflow test passed')
     ).toBeInTheDocument()
     expect(screen.getByText('Push build')).toBeInTheDocument()
@@ -208,6 +226,12 @@ describe('Agent route and approval decisions', () => {
     await user.click(screen.getByRole('button', { name: 'Confirm build plan' }))
     await vi.runAllTimersAsync()
     await user.click(screen.getByRole('button', { name: 'Upload models' }))
+    await vi.runAllTimersAsync()
+    expect(
+      screen.getByRole('heading', { name: 'Upload these input assets?' })
+    ).toBeInTheDocument()
+    expect(screen.queryByText('Push build')).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Upload assets' }))
     await vi.runAllTimersAsync()
     await user.click(
       screen.getByRole('button', { name: 'Open preview canvas' })

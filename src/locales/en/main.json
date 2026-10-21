@@ -7528,7 +7528,7 @@
         "lossy": "Convert or keep exact models",
         "existing": "Reuse workspace Build",
         "custom": "Custom build · scope, GPU and models",
-        "assets": "Upload image, video and audio inputs"
+        "assets": "Stock Cloud · image, video and audio inputs"
       },
       "request": "Run “{name}” on Comfy Cloud.",
       "intro": "I’ll read the Run on Cloud skill, inspect this workflow and your local install, then find the simplest route that preserves what it generates. I’ll ask when a choice or local upload needs your approval.",
@@ -7562,7 +7562,8 @@
         "save": "Save workflow copy",
         "readback": "Verify sidebar read-back",
         "handoff": "Report result and next step",
-        "repair": "Diagnose and repair one cause"
+        "repair": "Diagnose and repair one cause",
+        "inputCheck": "Check required input assets"
       },
       "details": {
         "skill": "Loaded comfy-run-on-cloud and its routing, consent and verification rules. Build/deploy reference skills are read only if that route is needed.",
@@ -7599,7 +7600,8 @@
         "readback": "Read the saved sidebar file back: name, non-zero size and unambiguous filename confirmed. Older record-only CLI saves need the Cloud connector or a local-file fallback.",
         "handoff": "Reported the route, conversions, uploaded files, test result and saved name. Custom routes also report Build/release/deployment IDs, GPU, region, worker bounds and stop command. No fabricated private workflow deep link is returned.",
         "repair": "Read failure logs and changed one diagnosed cause: use the verified non-Flagged pack pin. Validate and push the changed spec, rebuild the release, and redeploy on the approved Build/GPU/region before testing again. The previous working revision remains available.",
-        "repairExisting": "This existing deployment failed its import check and is excluded from reuse. No Build has been modified. I’ll check other workspace Builds; if none fits, a new or updated build needs your approved scope and GPU plan."
+        "repairExisting": "This existing deployment failed its import check and is excluded from reuse. No Build has been modified. I’ll check other workspace Builds; if none fits, a new or updated build needs your approved scope and GPU plan.",
+        "inputCheck": "Example local inputs for this demo: {inputs}. This check applies on every route, even when models and nodes are already compatible. Reuse verified destination copies when available; ask before sending any remaining local file. This check does not authorize any new upload."
       },
       "conversionTitle": "Keep the exact style, or convert?",
       "conversionBody": "Stock Cloud lacks acme_hero_lora_v5.safetensors. Running without this studio LoRA changes the image’s style. Convert a copy for Cloud, or keep exact dependencies and check existing Builds first. I recommend keeping the exact style for production.",
@@ -7608,7 +7610,7 @@
       "buildTitle": "This workflow needs a custom build",
       "buildBody": "No existing Build covers this example, and workspace capacity is available. I recommend just this workflow. Choose a plan below; I’ll ask separately before uploading local files. Preparing the spec sends the workflow JSON, including prompts, to the builder.",
       "uploadTitle": "Approve local file uploads",
-      "uploadBody": "Workspace: {workspace}. Each action approves only its named list. Estimated duration and applicable upload/storage/compute costs: unknown in this demo. Licenses and NSFW metadata: unknown; review before uploading. Public fetches use verified sources.",
+      "uploadBody": "Workspace: {workspace}. These are illustrative files in the demo inventory, not files read from your machine. Each action approves only its named list. Estimated duration and applicable upload/storage/compute costs: unknown. Licenses and NSFW metadata: unknown; review before uploading. Public fetches use verified sources.",
       "fileReason": {
         "style": "Required to preserve the local studio LoRA’s exact style; no verified public match.",
         "image": "Required by the example image loader.",
@@ -7618,7 +7620,8 @@
       },
       "destination": {
         "model": "Destination: private Cloud build storage in the selected workspace.",
-        "asset": "Destination: Cloud input library in the selected workspace."
+        "asset": "Destination: Cloud input library in the selected workspace.",
+        "deploymentAsset": "Destination: selected deployment’s input storage in the selected workspace."
       },
       "uploadModels": "Upload models",
       "approvedFiles": "Already approved: {files}",
@@ -7639,13 +7642,13 @@
       "demoPath": "Demo path",
       "tryPath": "Try this path",
       "pathHint": {
-        "auto": "Uses the current workflow’s coverage. To explore decisions, try Custom build, Convert or keep, or Upload inputs.",
-        "custom": "Choose workflow or whole instance, new or updated Build, GPU and region, then approve private model uploads.",
-        "lossy": "Choose a changed-style Cloud copy or keep exact dependencies. Keeping them may lead to a custom Build and model upload.",
+        "auto": "Uses current workflow coverage. Every demo path asks approval for its example input image before running.",
+        "custom": "Choose workflow or whole instance, new or updated Build, GPU and region, then approve private models and the input image separately.",
+        "lossy": "Choose a changed-style Cloud copy or keep exact dependencies, then approve the input image. Exact dependencies may also require a Build and model upload.",
         "assets": "Approve image, video and audio inputs before a stock Cloud test, or cancel to see the blocked state.",
-        "existing": "Reuse a compatible workspace Build; check readiness and test without asking for a new GPU or build scope.",
-        "stock": "Run on stock Cloud without build, GPU or local model choices. Validate, test and save a separate copy.",
-        "lossless": "Remap a verified identical model path automatically, then validate and test a separate copy on stock Cloud."
+        "existing": "Reuse a compatible workspace Build, approve its input image, then check readiness and test. No new GPU or build scope is needed.",
+        "stock": "Approve the input image before testing on stock Cloud. No custom Build or GPU choice is needed.",
+        "lossless": "Automatically remap a verified identical model path, then ask approval for the input image before validating and testing the copy."
       },
       "scopeQuestion": "What should I move to Cloud?",
       "workflowScopeHint": "Recommended · only the {packs} packs and {models} models in this example’s workflow inventory. Smaller build, fewer uploads.",
@@ -7654,7 +7657,8 @@
       "gpuHint": "Choose a GPU for a new Build. Updates start with the selected Build’s GPU for you to review. Pricing, build time and cold-start estimates are unknown in this simulation. The approved deployment uses 0–1 workers.",
       "chooseGpu": "Choose a GPU",
       "moreOptions": "Optional instructions and prompt",
-      "activePath": "Demo path: {path}"
+      "activePath": "Demo path: {path}",
+      "inputUploadTitle": "Upload these input assets?"
     },
     "title": "Homestead",
     "workspace": "Acme Studio",

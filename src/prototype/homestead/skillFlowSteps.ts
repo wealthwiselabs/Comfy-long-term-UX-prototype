@@ -25,6 +25,8 @@ export function skillCommand(step: SkillStep, session: SkillSession) {
           ? 'comfy build init /demo/ComfyUI --name <approved-name> --python /demo/ComfyUI/.venv/bin/python'
           : `comfy --json build init /demo/build --name <approved-name> --from-workflow ${file} --comfy-version <local-version>`,
     dryRun: 'comfy build validate\ncomfy build push --dry-run',
+    inputCheck:
+      'review inventoried input paths and verified Cloud copies; do not upload without approval',
     uploads:
       'send only explicitly approved files to their disclosed workspace destination',
     push: 'comfy build push',

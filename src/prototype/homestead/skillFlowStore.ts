@@ -77,7 +77,7 @@ export const useSkillFlowStore = defineStore('homestead-skill-flow', () => {
     if (!s) return
     s.route = 'stock'
     s.target = stockTarget({ ...s.workflow, ...s.requirements })
-    uploadGate(verificationSteps('stock'))
+    run(['inputCheck', ...verificationSteps('stock')])
   }
 
   function completeStep() {
@@ -95,6 +95,10 @@ export const useSkillFlowStore = defineStore('homestead-skill-flow', () => {
         phase: 'failed',
         continuation: [step, ...current.remaining]
       }
+      return
+    }
+    if (step === 'inputCheck') {
+      uploadGate(current.remaining)
       return
     }
     if (current.remaining.length) {
@@ -126,7 +130,7 @@ export const useSkillFlowStore = defineStore('homestead-skill-flow', () => {
       if (target) {
         s.route = 'existing'
         s.target = target
-        uploadGate(verificationSteps('existing'))
+        run(['inputCheck', ...verificationSteps('existing')])
         return
       }
       s.route = 'custom'
@@ -140,7 +144,13 @@ export const useSkillFlowStore = defineStore('homestead-skill-flow', () => {
       return
     }
     if (step === 'dryRun') {
-      uploadGate(['push', 'release', 'deploy', ...verificationSteps('custom')])
+      run([
+        'inputCheck',
+        'push',
+        'release',
+        'deploy',
+        ...verificationSteps('custom')
+      ])
       return
     }
     if (step === 'handoff') state.value = { phase: 'complete' }
@@ -251,6 +261,7 @@ export const useSkillFlowStore = defineStore('homestead-skill-flow', () => {
     session.value.repairs++
     session.value.failure = 'none'
     if (session.value.route === 'existing') {
+      approvedFiles.value = []
       const failedId = session.value.target?.id
       const failed = session.value.environments.find(
         (env) => env.id === failedId

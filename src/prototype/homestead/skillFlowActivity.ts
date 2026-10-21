@@ -1,4 +1,4 @@
-import { existingTarget, stockCovers } from './skillFlowModel'
+import { existingTarget, stockCovers, requiredUploads } from './skillFlowModel'
 import type { SkillActivity, SkillSession, SkillStep } from './skillFlowModel'
 import { skillCommand } from './skillFlowSteps'
 
@@ -61,6 +61,10 @@ export function skillActivity(
       region: s.request?.region ?? '',
       scope: s.request?.scope ?? 'workflow',
       files: files.join(', ') || '—',
+      inputs: requiredUploads(s)
+        .filter((file) => file.kind === 'asset')
+        .map((file) => `${file.name} (${file.size})`)
+        .join(', '),
       buildId:
         s.request?.mode === 'update'
           ? s.request.sourceId

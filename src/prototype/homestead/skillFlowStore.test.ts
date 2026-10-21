@@ -17,12 +17,63 @@ function start(scenario: SkillScenario = 'auto') {
 describe('Run on Cloud skill transcript', () => {
   beforeEach(() => vi.useFakeTimers())
 
+  it.for(['stock', 'lossless', 'existing', 'auto', 'lossy', 'custom'] as const)(
+    'requires separate input consent before running the %s path',
+    (scenario) => {
+      const flow = start(scenario)
+      vi.runAllTimers()
+      if (scenario === 'lossy') {
+        flow.chooseConversion(true)
+        vi.runAllTimers()
+      }
+      if (scenario === 'custom') {
+        flow.confirmBuild({
+          mode: 'create',
+          name: 'With inputs',
+          gpu: 'B200',
+          region: 'us-west',
+          scope: 'workflow',
+          instructions: ''
+        })
+        vi.runAllTimers()
+        flow.approveUploads('model')
+        vi.runAllTimers()
+      }
+      expect(flow.events.map((event) => event.step)).toContain('inputCheck')
+      expect(flow.state.phase).toBe('uploads')
+      expect(flow.pendingFiles.map((file) => file.name)).toEqual([
+        'reference.png'
+      ])
+      expect(
+        flow.events.some(
+          (event) => event.step === 'test' || event.step === 'push'
+        )
+      ).toBe(false)
+      flow.declineUploads()
+      vi.runAllTimers()
+      expect(flow.state.phase).toBe('blocked')
+      expect(
+        flow.events.some(
+          (event) => event.step === 'test' || event.step === 'push'
+        )
+      ).toBe(false)
+      flow.reviewUploads()
+      flow.approveUploads('asset')
+      vi.runAllTimers()
+      expect(flow.state.phase).toBe('complete')
+      expect(flow.approvedFiles).toContain('reference.png')
+    }
+  )
+
   it.for(['stock', 'lossless', 'existing', 'auto'] as const)(
     'finishes the %s route without creating a build and preserves the original',
     (scenario) => {
       const flow = start(scenario)
       expect(flow.state.phase).toBe('running')
       expect(flow.events.map((event) => event.step)).toEqual(['skill'])
+      vi.runAllTimers()
+      expect(flow.state.phase).toBe('uploads')
+      flow.approveUploads('asset')
       vi.runAllTimers()
       expect(flow.state.phase).toBe('complete')
       expect(flow.events.some((event) => event.step === 'push')).toBe(false)
@@ -66,6 +117,33 @@ describe('Run on Cloud skill transcript', () => {
     ])
   })
 
+  it('does not treat input approval as model approval on a custom Build', () => {
+    const flow = start('custom')
+    vi.runAllTimers()
+    flow.confirmBuild({
+      mode: 'create',
+      name: 'With inputs',
+      gpu: 'B200',
+      region: 'us-west',
+      scope: 'workflow',
+      instructions: ''
+    })
+    vi.runAllTimers()
+    flow.approveUploads('asset')
+    vi.runAllTimers()
+    expect(flow.state.phase).toBe('uploads')
+    expect(flow.pendingFiles.map((file) => file.name)).toEqual([
+      'acme_hero_lora_v5.safetensors'
+    ])
+    expect(
+      flow.events.some(
+        (event) => event.step === 'push' || event.step === 'test'
+      )
+    ).toBe(false)
+    flow.declineUploads()
+    expect(flow.state.phase).toBe('blocked')
+  })
+
   it('checks inventory, existing Builds and limits before asking for a custom build plan', () => {
     const flow = start('custom')
     vi.runAllTimers()
@@ -91,6 +169,9 @@ describe('Run on Cloud skill transcript', () => {
     expect(flow.state.phase).toBe('uploads')
     expect(flow.events.some((event) => event.step === 'push')).toBe(false)
     flow.approveUploads('model')
+    vi.runAllTimers()
+    expect(flow.state.phase).toBe('uploads')
+    flow.approveUploads('asset')
     vi.runAllTimers()
     expect(flow.state.phase).toBe('complete')
     expect(flow.session?.request).toMatchObject({
@@ -122,6 +203,9 @@ describe('Run on Cloud skill transcript', () => {
     })
     vi.runAllTimers()
     flow.approveUploads('model')
+    vi.runAllTimers()
+    expect(flow.state.phase).toBe('uploads')
+    flow.approveUploads('asset')
     vi.runAllTimers()
     expect(flow.state.phase).toBe('failed')
     const before = flow.events.length
@@ -155,6 +239,9 @@ describe('Run on Cloud skill transcript', () => {
     vi.runAllTimers()
     flow.chooseConversion(true)
     vi.runAllTimers()
+    expect(flow.state.phase).toBe('uploads')
+    flow.approveUploads('asset')
+    vi.runAllTimers()
     expect(flow.state.phase).toBe('complete')
     expect(flow.session?.lossyApproved).toBe(true)
     expect(flow.events.map((event) => event.step)).toContain('convert')
@@ -169,6 +256,8 @@ describe('Run on Cloud skill transcript', () => {
       environments,
       'deployment'
     )
+    vi.runAllTimers()
+    flow.approveUploads('asset')
     vi.runAllTimers()
     expect(flow.state.phase).toBe('failed')
     expect(flow.events.some((event) => event.step === 'test')).toBe(false)
@@ -195,6 +284,9 @@ describe('Run on Cloud skill transcript', () => {
     )
     vi.runAllTimers()
     flow.chooseConversion(false)
+    vi.runAllTimers()
+    expect(flow.state.phase).toBe('uploads')
+    flow.approveUploads('asset')
     vi.runAllTimers()
     expect(flow.state.phase).toBe('complete')
     expect(flow.session?.route).toBe('existing')
