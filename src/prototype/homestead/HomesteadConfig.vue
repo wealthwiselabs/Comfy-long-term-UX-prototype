@@ -4,6 +4,7 @@ import { cn } from '@comfyorg/tailwind-utils'
 import { useI18n } from 'vue-i18n'
 import Button from '@/components/ui/button/Button.vue'
 import { useHomesteadStore } from './store'
+import { skillScenarios } from './skillFlowModel'
 const s = useHomesteadStore()
 const { t } = useI18n()
 function resetDemo() {
@@ -126,6 +127,18 @@ function scenario(kind: string) {
         <p class="text-xs leading-5 text-muted-foreground">
           {{ t('homestead.coldStartSimulation') }}
         </p>
+        <label for="hs-agent-scenario" class="block pt-2 text-xs font-medium">{{
+          t('homestead.skillFlow.scenarioLabel')
+        }}</label>
+        <select
+          id="hs-agent-scenario"
+          v-model="s.agentScenario"
+          class="h-9 w-full rounded-lg bg-secondary-background px-3 text-xs"
+        >
+          <option v-for="kind in skillScenarios" :key="kind" :value="kind">
+            {{ t(`homestead.skillFlow.scenarios.${kind}`) }}
+          </option>
+        </select>
         <label for="hs-build" class="block pt-2 text-xs font-medium">{{
           t('homestead.buildResult')
         }}</label>

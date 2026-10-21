@@ -4,6 +4,8 @@ import { computed, onScopeDispose, ref, toRaw } from 'vue'
 import { z } from 'zod'
 import { desktopBuildPrompt, deploymentLinkSchema } from './agentModel'
 import type { AgentRun, DesktopBuildRequest } from './agentModel'
+import type { SkillScenario } from './skillFlowModel'
+import { useSkillFlowStore } from './skillFlowStore'
 
 import {
   buildPrompt,
@@ -62,11 +64,13 @@ export const useHomesteadStore = defineStore('homestead-prototype', () => {
   >(null)
   const agentOpen = ref(false)
   const agentHandoff = ref<{
+    id: string
     workflow: Workflow
     workspace: string
     request?: DesktopBuildRequest
   } | null>(null)
   const agentRun = ref<AgentRun | null>(null)
+  const agentScenario = ref<SkillScenario>('auto')
   const agentStep = ref(0)
   const agentUrl = computed(() => {
     if (!agentRun.value || build.value.phase !== 'ready') return null
@@ -408,8 +412,23 @@ export const useHomesteadStore = defineStore('homestead-prototype', () => {
   }
   function startAgentHandoff() {
     if (!allowed.value || build.value.phase === 'building') return
+    const flow = useSkillFlowStore()
+    if (
+      agentHandoff.value &&
+      flow.session?.id === agentHandoff.value.id &&
+      flow.session.scenario === agentScenario.value &&
+      flow.state.phase !== 'complete' &&
+      JSON.stringify(toRaw(active.value)) ===
+        JSON.stringify(toRaw(agentHandoff.value.workflow)) &&
+      workspaceName.value === agentHandoff.value.workspace
+    ) {
+      dialog.value = null
+      agentOpen.value = true
+      return
+    }
     const previous = agentRun.value
     agentHandoff.value = {
+      id: crypto.randomUUID(),
       workflow: structuredClone(toRaw(active.value)),
       workspace: workspaceName.value,
       ...(previous?.workflow.id === active.value.id &&
@@ -684,6 +703,7 @@ export const useHomesteadStore = defineStore('homestead-prototype', () => {
     agentRun.value = null
     agentHandoff.value = null
     agentStep.value = 0
+    agentScenario.value = 'auto'
     entry.value = 'cloud'
     runtime.value = 'sleeping'
     access.value = 'admin'
@@ -723,6 +743,7 @@ export const useHomesteadStore = defineStore('homestead-prototype', () => {
     dialog,
     agentOpen,
     agentHandoff,
+    agentScenario,
     startAgentHandoff,
     agentRun,
     cloudBuild,

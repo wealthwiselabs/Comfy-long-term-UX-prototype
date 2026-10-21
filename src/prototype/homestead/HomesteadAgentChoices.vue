@@ -18,16 +18,18 @@ const name = ref(approved?.name ?? `${workflow.value.name} Cloud`)
 const gpu = ref(approved?.gpu ?? 'RTX PRO 6000')
 const instructions = ref(approved?.instructions ?? '')
 const scope = ref<'workflow' | 'instance'>(approved?.scope ?? 'workflow')
-const region = ref(approved?.region ?? 'Any available region')
-const instancePacks = computed(
-  () => new Set(s.workflows.flatMap((item) => item.packs)).size
-)
-const instanceModels = computed(
-  () => new Set(s.workflows.flatMap((item) => item.models)).size
-)
+const region = ref(approved?.region ?? 'us-west')
 const builds = computed(() => latestBuilds(s.availableEnvironments))
 const sourceId = ref(
-  approved?.mode === 'update' ? approved.sourceId : (builds.value[0]?.id ?? '')
+  approved?.mode === 'update'
+    ? (approved.sourceEnvironmentId ??
+        builds.value.find(
+          (build) =>
+            (build.buildId ?? build.id) === approved.sourceId ||
+            build.id === approved.sourceId
+        )?.id ??
+        approved.sourceId)
+    : (builds.value[0]?.id ?? '')
 )
 const source = computed(() =>
   builds.value.find((build) => build.id === sourceId.value)
@@ -46,7 +48,11 @@ const request = computed<DesktopBuildRequest>(() => ({
   region: region.value,
   ...(mode.value === 'create'
     ? { mode: 'create' as const }
-    : { mode: 'update' as const, sourceId: sourceId.value })
+    : {
+        mode: 'update' as const,
+        sourceId: source.value?.buildId ?? sourceId.value,
+        sourceEnvironmentId: sourceId.value
+      })
 }))
 const prompt = computed(() =>
   desktopBuildPrompt(
@@ -94,12 +100,7 @@ function submit() {
       v-if="scope === 'instance'"
       class="text-xs leading-5 text-muted-foreground"
     >
-      {{
-        t('homestead.instanceScopeDisclosure', {
-          packs: instancePacks,
-          models: instanceModels
-        })
-      }}
+      {{ t('homestead.instanceScopeDisclosure') }}
     </p>
     <fieldset class="m-0 min-w-0 space-y-2 border-0 p-0">
       <legend class="mb-2 text-sm font-medium">
@@ -134,6 +135,7 @@ function submit() {
       ><span>{{ t('homestead.existingBuild') }}</span>
       <select
         v-model="sourceId"
+        :aria-label="t('homestead.existingBuild')"
         class="h-10 w-full rounded-lg border border-border-default bg-base-background px-3 text-sm"
         @change="selectSource"
       >

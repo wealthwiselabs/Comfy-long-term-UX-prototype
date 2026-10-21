@@ -7,7 +7,10 @@ export type DesktopBuildRequest = {
   instructions: string
   scope?: 'workflow' | 'instance'
   region?: string
-} & ({ mode: 'create' } | { mode: 'update'; sourceId: string })
+} & (
+  | { mode: 'create' }
+  | { mode: 'update'; sourceId: string; sourceEnvironmentId?: string }
+)
 
 export interface AgentRun {
   request: DesktopBuildRequest
