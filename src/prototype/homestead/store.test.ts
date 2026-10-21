@@ -167,8 +167,8 @@ describe('Homestead prototype safeguards', () => {
   })
   it('requests a local workflow location instead of inventing a filesystem path', () => {
     const prompt = buildPrompt(seedWorkflows()[0], 'build', 1)
-    expect(prompt).toContain('Ask me to locate the workflow file')
+    expect(prompt).toContain('Ask me to locate the saved workflow file')
     expect(prompt).toContain('no local path is known')
-    expect(prompt).toContain('only after deployment readiness is confirmed')
+    expect(prompt).toContain('Verify a real job with required approved inputs')
   })
 })

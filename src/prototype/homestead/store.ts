@@ -61,6 +61,11 @@ export const useHomesteadStore = defineStore('homestead-prototype', () => {
     | null
   >(null)
   const agentOpen = ref(false)
+  const agentHandoff = ref<{
+    workflow: Workflow
+    workspace: string
+    request?: DesktopBuildRequest
+  } | null>(null)
   const agentRun = ref<AgentRun | null>(null)
   const agentStep = ref(0)
   const agentUrl = computed(() => {
@@ -401,6 +406,22 @@ export const useHomesteadStore = defineStore('homestead-prototype', () => {
     editingEnvironmentId.value = id
     dialog.value = 'platform'
   }
+  function startAgentHandoff() {
+    if (!allowed.value || build.value.phase === 'building') return
+    const previous = agentRun.value
+    agentHandoff.value = {
+      workflow: structuredClone(toRaw(active.value)),
+      workspace: workspaceName.value,
+      ...(previous?.workflow.id === active.value.id &&
+      previous.workspace === workspaceName.value
+        ? { request: structuredClone(toRaw(previous.request)) }
+        : {})
+    }
+    agentRun.value = null
+    buildSurface.value = 'agent'
+    dialog.value = null
+    agentOpen.value = true
+  }
   function startBuild(
     surface: 'agent' | 'platform' | 'manager',
     request?: DesktopBuildRequest,
@@ -429,6 +450,8 @@ export const useHomesteadStore = defineStore('homestead-prototype', () => {
     )
     const sourcePacks = request?.mode === 'create' ? [] : source.packs
     const sourceModels = request?.mode === 'create' ? [] : source.models
+    const scopeWorkflows =
+      request?.scope === 'instance' ? workflows.value : [workflow]
     const capturedRequest = request
       ? structuredClone(toRaw(request))
       : undefined
@@ -459,11 +482,21 @@ export const useHomesteadStore = defineStore('homestead-prototype', () => {
       }
     } else if (surface !== 'agent') cloudBuild.value = null
     buildRequiredPacks.value = [
-      ...new Set([...sourcePacks, ...workflow.packs, ...selectedPacks.value])
+      ...new Set([
+        ...sourcePacks,
+        ...scopeWorkflows.flatMap((item) => item.packs),
+        ...selectedPacks.value
+      ])
     ]
-    const models = [...new Set([...sourceModels, ...workflow.models])]
+    const models = [
+      ...new Set([
+        ...sourceModels,
+        ...scopeWorkflows.flatMap((item) => item.models)
+      ])
+    ]
     build.value = transitionBuild(build.value, 'start')
     if (surface === 'agent') {
+      agentHandoff.value = null
       dialog.value = null
       agentOpen.value = true
     }
@@ -649,6 +682,7 @@ export const useHomesteadStore = defineStore('homestead-prototype', () => {
     dialog.value = null
     agentOpen.value = false
     agentRun.value = null
+    agentHandoff.value = null
     agentStep.value = 0
     entry.value = 'cloud'
     runtime.value = 'sleeping'
@@ -688,6 +722,8 @@ export const useHomesteadStore = defineStore('homestead-prototype', () => {
     failure,
     dialog,
     agentOpen,
+    agentHandoff,
+    startAgentHandoff,
     agentRun,
     cloudBuild,
     repairCloudBuild,

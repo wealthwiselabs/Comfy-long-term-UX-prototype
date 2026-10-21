@@ -5,6 +5,7 @@ import { useHomesteadStore } from './store'
 import HomesteadDialog from './HomesteadDialog.vue'
 import HomesteadBuild from './HomesteadBuild.vue'
 import HomesteadAgent from './HomesteadAgent.vue'
+import HomesteadAgentSetup from './HomesteadAgentSetup.vue'
 const s = useHomesteadStore()
 const { t } = useI18n()
 </script>
@@ -32,7 +33,8 @@ const { t } = useI18n()
         ><i class="icon-[lucide--x] size-4"
       /></Button>
     </div>
-    <HomesteadAgent v-if="s.agentRun" />
+    <HomesteadAgentSetup v-if="s.agentHandoff" />
+    <HomesteadAgent v-else-if="s.agentRun" />
     <div v-else class="space-y-5 overflow-auto p-4">
       <p class="text-sm text-muted-foreground">
         {{

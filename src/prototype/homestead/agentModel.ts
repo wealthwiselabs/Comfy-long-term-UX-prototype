@@ -5,6 +5,8 @@ export type DesktopBuildRequest = {
   name: string
   gpu: string
   instructions: string
+  scope?: 'workflow' | 'instance'
+  region?: string
 } & ({ mode: 'create' } | { mode: 'update'; sourceId: string })
 
 export interface AgentRun {
@@ -13,6 +15,10 @@ export interface AgentRun {
   workspace: string
   prompt: string
   sourceRevision?: string
+}
+
+export function localAgentPrompt(workflow: Workflow, workspace: string) {
+  return `Run my workflow on Comfy Cloud. Read comfy skills show comfy-run-on-cloud first.\nWorkflow: ${workflow.name} (simulated active-canvas handoff; production supplies a saved file path)\nWorkspace: ${workspace}\nCheck stock Cloud, verified lossless conversion, and existing workspace Builds before proposing a custom build. Preserve the original workflow. Ask before lossy changes or any local file upload. If a custom build is needed, ask for scope, new versus named update, name, GPU and region. Verify a real job before claiming it runs. Return a verified UI link only when supported; otherwise explain the sidebar/API handoff.`
 }
 
 export function desktopBuildPrompt(
@@ -24,7 +30,7 @@ export function desktopBuildPrompt(
     request.mode === 'create'
       ? `Create a new build named "${request.name}".`
       : `Prepare a new revision of build "${request.name}" (build ID: ${request.sourceId}). Keep the working revision available until I switch.`
-  return `Use the Homestead build-and-deploy skill.\n\n${target}\nWorkspace: ${workspace}\nGPU: ${request.gpu}\nWorkflow: ${workflow.name} (current Desktop canvas)\nNode packs: ${workflow.packs.join(', ') || 'ComfyUI core'}\nModels: ${workflow.models.join(', ') || 'Default models'}\n\nInspect the current workflow and local dependency versions. Package only required dependencies, reuse existing authentication and model setup, then build and deploy. Report progress and logs. Ask for missing files or credentials. Return the Open UI URL with this workflow loaded only after readiness checks pass.${request.instructions.trim() ? `\n\nAdditional instructions:\n${request.instructions.trim()}` : ''}`
+  return `${localAgentPrompt(workflow, workspace)}\n\nApproved custom-build target: ${target}\nGPU: ${request.gpu}\nRegion: ${request.region ?? 'ask if unknown'}\nScope: ${request.scope ?? 'workflow'}\nWorker bounds: 0–1\nNode packs: ${workflow.packs.join(', ') || 'ComfyUI core'}\nModels: ${workflow.models.join(', ') || 'Default models'}\nPackage only the approved scope. Report progress and logs. Ask for missing files or credentials. Read import logs and verify a real job.${request.instructions.trim() ? `\n\nAdditional instructions:\n${request.instructions.trim()}` : ''}`
 }
 
 export function latestBuilds(environments: Environment[]) {
@@ -72,10 +78,6 @@ export const deploymentLinkSchema = z.object({
 
 export function agentActivities(run: AgentRun) {
   const quote = (value: string) => `'${value.replaceAll("'", "'\\''")}'`
-  const buildTarget =
-    run.request.mode === 'update'
-      ? `--build ${quote(run.request.sourceId)} --new-revision`
-      : `--name ${quote(run.request.name)}`
   return [
     {
       kind: 'thinking',
@@ -86,19 +88,20 @@ export function agentActivities(run: AgentRun) {
     {
       kind: 'skill',
       key: 'skill',
-      input: 'read_skill("homestead/build-and-deploy")',
+      input: 'comfy skills show comfy-run-on-cloud',
       output:
         'SKILL.md\ninspect → package → build → deploy → verify\npreserve_working_revision: true'
     },
     {
       kind: 'tool',
       key: 'inspect',
-      input: `inspect_workflow({ source: "desktop.active_canvas", workflow: ${JSON.stringify(run.workflow.name)} })`,
+      input:
+        'comfy --json build inventory workflow.json --cloud --server <local-server> --desktop --input-root <input-dir>',
       output: JSON.stringify(
         {
           node_packs: run.workflow.packs,
           models: run.workflow.models,
-          scope: 'workflow_dependencies_only'
+          scope: run.request.scope ?? 'workflow'
         },
         null,
         2
@@ -113,28 +116,28 @@ export function agentActivities(run: AgentRun) {
     {
       kind: 'cli',
       key: 'package',
-      input: 'comfy cloud package --manifest build.yaml',
+      input: 'comfy build validate && comfy build push --dry-run',
       output:
-        '[1/3] Resolving node-pack versions\n[2/3] Reusing model references\n[3/3] Packaging workflow dependencies\n✓ Upload complete'
+        '[1/3] Resolving node-pack versions\n[2/3] Reusing verified model references\n[3/3] Checking pins without uploading or saving\n✓ Dry-run checks complete'
     },
     {
       kind: 'cli',
       key: 'submit',
-      input: `comfy cloud build ${run.request.mode === 'update' ? 'update' : 'create'} ${buildTarget} --manifest build.yaml`,
+      input: 'comfy build push',
       output:
         '✓ Build accepted\n✓ Dependency resolution complete\n→ Container build queued'
     },
     {
       kind: 'cli',
       key: 'build',
-      input: 'comfy cloud build logs --follow',
+      input: 'comfy build release create --target linux/nvidia --watch',
       output:
         '#1 Fetch base image                 CACHED\n#2 Install required node packs      DONE\n#3 Validate model references        DONE\n#4 Export image                     DONE\n✓ Build succeeded'
     },
     {
       kind: 'cli',
       key: 'deploy',
-      input: `comfy cloud deploy --gpu ${quote(run.request.gpu)} --wait`,
+      input: `comfy deploy up <spec> --gpu ${quote(run.request.gpu)} --region ${quote(run.request.region ?? '<approved-region>')} --min 0 --max 1 --watch`,
       output:
         '→ Provisioning worker\n✓ Image pulled\n✓ ComfyUI started\n→ Waiting for readiness probe'
     },
@@ -144,7 +147,7 @@ export function agentActivities(run: AgentRun) {
       input:
         'check_deployment({ readiness: true, workflow_dependencies: true })',
       output:
-        'GET /system_stats → 200\nGET /object_info → 200\n✓ Required node packs registered\n✓ Workflow dependencies matched\n✓ Authenticated Open UI link ready'
+        'GET /system_stats → 200\nGET /object_info → 200\n✓ Required node packs imported without errors\n✓ Approved deployment asset plan reconciled\n✓ Test job completed with required inputs\n✓ Preview Open UI link ready (simulated product target)'
     }
   ]
 }
