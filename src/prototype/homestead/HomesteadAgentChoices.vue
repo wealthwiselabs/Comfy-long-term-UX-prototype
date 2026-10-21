@@ -8,14 +8,16 @@ import { PLATFORM_GPUS } from '../fixtures/customCloud'
 import { desktopBuildPrompt, latestBuilds } from './agentModel'
 import type { DesktopBuildRequest } from './agentModel'
 import { useHomesteadStore } from './store'
+import { useSkillFlowStore } from './skillFlowStore'
 const s = useHomesteadStore()
+const flow = useSkillFlowStore()
 const emit = defineEmits<{ confirm: [request: DesktopBuildRequest] }>()
 const { t } = useI18n()
 const workflow = computed(() => s.agentHandoff?.workflow ?? s.active)
 const approved = s.agentHandoff?.request
 const mode = ref<'create' | 'update'>(approved?.mode ?? 'create')
 const name = ref(approved?.name ?? `${workflow.value.name} Cloud`)
-const gpu = ref(approved?.gpu ?? 'RTX PRO 6000')
+const gpu = ref(approved?.gpu ?? '')
 const instructions = ref(approved?.instructions ?? '')
 const scope = ref<'workflow' | 'instance'>(approved?.scope ?? 'workflow')
 const region = ref(approved?.region ?? 'us-west')
@@ -64,6 +66,7 @@ const prompt = computed(() =>
 const valid = computed(
   () =>
     name.value.trim().length > 0 &&
+    gpu.value.length > 0 &&
     region.value.trim().length > 0 &&
     (mode.value === 'create' || !!source.value)
 )
@@ -77,7 +80,7 @@ function selectMode(next: 'create' | 'update') {
   if (next === 'update') selectSource()
   else {
     name.value = `${workflow.value.name} Cloud`
-    gpu.value = 'RTX PRO 6000'
+    gpu.value = ''
   }
 }
 function submit() {
@@ -86,25 +89,52 @@ function submit() {
 </script>
 <template>
   <form class="space-y-5" @submit.prevent="submit">
-    <label class="block space-y-2 text-sm">
-      <span>{{ t('homestead.buildScope') }}</span>
-      <select
-        v-model="scope"
-        class="h-10 w-full rounded-lg border border-border-default bg-base-background px-3 text-sm"
-      >
-        <option value="workflow">{{ t('homestead.workflowScope') }}</option>
-        <option value="instance">{{ t('homestead.instanceScope') }}</option>
-      </select>
-    </label>
-    <p
-      v-if="scope === 'instance'"
-      class="text-xs leading-5 text-muted-foreground"
-    >
-      {{ t('homestead.instanceScopeDisclosure') }}
-    </p>
     <fieldset class="m-0 min-w-0 space-y-2 border-0 p-0">
       <legend class="mb-2 text-sm font-medium">
-        {{ t('homestead.buildDestination') }}
+        {{ t('homestead.skillFlow.scopeQuestion') }}
+      </legend>
+      <label
+        v-for="option in ['workflow', 'instance'] as const"
+        :key="option"
+        :class="
+          cn(
+            'flex cursor-pointer items-start gap-3 rounded-lg border p-3',
+            scope === option
+              ? 'border-base-foreground bg-secondary-background'
+              : 'border-border-subtle'
+          )
+        "
+      >
+        <input
+          v-model="scope"
+          type="radio"
+          name="build-scope"
+          :value="option"
+          :aria-label="t(`homestead.${option}Scope`)"
+          class="mt-1 size-3.5 shrink-0 accent-base-foreground"
+        />
+        <span class="space-y-1">
+          <span class="block text-sm font-medium">{{
+            t(`homestead.${option}Scope`)
+          }}</span>
+          <span class="block text-xs leading-5 text-muted-foreground">{{
+            option === 'workflow'
+              ? t('homestead.skillFlow.workflowScopeHint', {
+                  packs:
+                    flow.session?.requirements.packs.length ??
+                    workflow.packs.length,
+                  models:
+                    flow.session?.requirements.models.length ??
+                    workflow.models.length
+                })
+              : t('homestead.instanceScopeDisclosure')
+          }}</span>
+        </span>
+      </label>
+    </fieldset>
+    <fieldset class="m-0 min-w-0 space-y-2 border-0 p-0">
+      <legend class="mb-2 text-sm font-medium">
+        {{ t('homestead.skillFlow.destinationQuestion') }}
       </legend>
       <div class="grid gap-2">
         <label
@@ -147,6 +177,12 @@ function submit() {
         t('homestead.updateBuildHint')
       }}</span>
     </label>
+    <p class="text-sm font-medium">
+      {{ t('homestead.skillFlow.gpuQuestion') }}
+    </p>
+    <p class="text-xs leading-5 text-muted-foreground">
+      {{ t('homestead.skillFlow.gpuHint') }}
+    </p>
     <div class="grid gap-4">
       <label class="space-y-2 text-sm"
         ><span>{{ t('homestead.buildName') }}</span
@@ -163,6 +199,9 @@ function submit() {
           :aria-label="t('homestead.gpu')"
           class="h-10 w-full rounded-lg border border-border-default bg-base-background px-3 text-sm"
         >
+          <option disabled value="">
+            {{ t('homestead.skillFlow.chooseGpu') }}
+          </option>
           <option v-for="option in gpuOptions" :key="option">
             {{ option }}
           </option>
@@ -184,28 +223,32 @@ function submit() {
         </p>
       </div>
     </div>
-    <label class="block space-y-2 text-sm"
-      ><span
-        >{{ t('homestead.agentInstructions') }}
-        <span class="text-muted-foreground">{{
-          t('homestead.optional')
-        }}</span></span
-      ><textarea
-        v-model="instructions"
-        rows="3"
-        maxlength="2000"
-        :aria-label="t('homestead.agentInstructions')"
-        :placeholder="t('homestead.instructionsPlaceholder')"
-        class="w-full resize-y rounded-lg border border-border-default bg-base-background px-3 py-2 font-sans text-sm outline-none focus:border-base-foreground"
-      />
-    </label>
     <details class="rounded-lg border border-border-subtle text-xs">
       <summary class="cursor-pointer px-3 py-3 text-muted-foreground">
-        {{ t('homestead.reviewAgentPrompt') }}
+        {{ t('homestead.skillFlow.moreOptions') }}
       </summary>
-      <pre
-        class="max-h-48 overflow-auto border-t border-border-subtle px-3 py-3 font-sans leading-5 whitespace-pre-wrap"
-        >{{ prompt }}</pre>
+      <div class="space-y-3 border-t border-border-subtle p-3">
+        <label class="block space-y-2 text-sm">
+          <span
+            >{{ t('homestead.agentInstructions') }} ·
+            {{ t('homestead.optional') }}</span
+          >
+          <textarea
+            v-model="instructions"
+            rows="3"
+            maxlength="2000"
+            :aria-label="t('homestead.agentInstructions')"
+            :placeholder="t('homestead.instructionsPlaceholder')"
+            class="w-full resize-y rounded-lg border border-border-default bg-base-background px-3 py-2 font-sans text-sm outline-none focus:border-base-foreground"
+          />
+        </label>
+        <p class="text-xs text-muted-foreground">
+          {{ t('homestead.reviewAgentPrompt') }}
+        </p>
+        <pre
+          class="max-h-48 overflow-auto font-sans text-xs leading-5 whitespace-pre-wrap"
+          >{{ prompt }}</pre>
+      </div>
     </details>
     <p class="text-xs leading-5 text-muted-foreground">
       {{ t('homestead.buildPlanDisclosure') }}

@@ -13,7 +13,7 @@ const { t } = useI18n()
   <aside
     v-if="(s.agentOpen || s.agentHandoff) && s.allowed"
     v-show="s.agentOpen"
-    class="flex w-100 max-w-full shrink-0 flex-col overflow-hidden border-l border-border-subtle bg-base-background text-base-foreground max-md:absolute max-md:inset-y-0 max-md:right-0 max-md:z-40"
+    class="flex w-md max-w-full shrink-0 flex-col overflow-hidden border-l border-border-subtle bg-base-background text-base-foreground max-md:absolute max-md:inset-y-0 max-md:right-0 max-md:z-40"
   >
     <div
       class="flex items-center justify-between border-b border-border-subtle p-3"

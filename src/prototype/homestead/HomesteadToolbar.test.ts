@@ -22,6 +22,24 @@ describe('prototype preview navigation', () => {
     window.history.replaceState({}, '', '/prototype/homestead')
     i18n.global.locale.value = 'en'
   })
+  it('lets a presenter start a fresh custom-build path from the visible toolbar', async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    const s = setup()
+    s.startAgentHandoff()
+    await user.selectOptions(
+      screen.getByRole('combobox', { name: 'Demo path' }),
+      'custom'
+    )
+    expect(
+      screen.getByText(/Choose workflow or whole instance/)
+    ).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Try this path' }))
+    expect(s.agentScenario).toBe('custom')
+    expect(s.agentHandoff).toBeNull()
+    expect(s.agentOpen).toBe(false)
+    expect(s.dialog).toBe('desktop')
+    expect(s.build.phase).toBe('idle')
+  })
   it('switches between Local and a compatible Cloud build without changing the workflow', async () => {
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
     const s = setup()

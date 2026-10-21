@@ -8,6 +8,7 @@ import { HOME_TAB_ID, usePrototypeTabsStore } from '../stores/tabsStore'
 import { usePrototypeCustomNodesStore } from '../stores/customNodesStore'
 import { useHomesteadStore } from './store'
 import HomesteadConfig from './HomesteadConfig.vue'
+import HomesteadSkillPaths from './HomesteadSkillPaths.vue'
 import { usePrototypeUiStore } from '../stores/uiStore'
 import { compatibility } from './model'
 const s = useHomesteadStore()
@@ -181,4 +182,5 @@ function switchPreview(target: 'desktop' | 'cloud') {
       </PopoverRoot>
     </div>
   </div>
+  <HomesteadSkillPaths v-if="s.entry === 'desktop' && s.allowed" />
 </template>

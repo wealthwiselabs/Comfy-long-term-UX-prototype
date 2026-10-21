@@ -64,6 +64,13 @@ function preview() {
   >
     <p class="text-xs text-muted-foreground">
       {{ t('homestead.skillFlow.simulated') }}
+      <span class="mt-2 block font-medium">{{
+        t('homestead.skillFlow.activePath', {
+          path: t(
+            `homestead.skillFlow.scenarios.${flow.session?.scenario ?? s.agentScenario}`
+          )
+        })
+      }}</span>
     </p>
     <section
       class="ml-5 space-y-1 rounded-xl bg-secondary-background px-4 py-3"
@@ -84,7 +91,11 @@ function preview() {
     <ol class="space-y-2" :aria-label="t('homestead.skillFlow.progress')">
       <li v-for="activity in flow.events" :key="activity.id">
         <details
-          :open="activity.status !== 'done'"
+          :open="
+            activity.status !== 'done' ||
+            activity.step === 'planApproved' ||
+            activity.step === 'conversionApproved'
+          "
           class="rounded-lg border border-border-subtle"
         >
           <summary

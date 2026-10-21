@@ -79,6 +79,44 @@ describe('Agent route and approval decisions', () => {
     ).toBeInTheDocument()
   })
 
+  it('asks for a GPU and lists both private models when whole-instance scope is chosen', async () => {
+    const user = userEvent.setup({
+      advanceTimers: vi.advanceTimersByTime,
+      applyAccept: false
+    })
+    const s = useHomesteadStore()
+    s.agentScenario = 'custom'
+    s.startAgentHandoff()
+    render(HomesteadAgentSetup, { global: { plugins: [i18n] } })
+    await vi.runAllTimersAsync()
+    expect(
+      screen.getByRole('button', { name: 'Confirm build plan' })
+    ).toBeDisabled()
+    expect(screen.getByText(/8 packs.*9 models.*36 GB/)).toBeInTheDocument()
+    await user.click(screen.getByRole('radio', { name: 'Whole instance' }))
+    await user.selectOptions(
+      screen.getByRole('combobox', { name: 'GPU' }),
+      'H100 SXM'
+    )
+    await user.click(screen.getByRole('button', { name: 'Confirm build plan' }))
+    await vi.runAllTimersAsync()
+    expect(useSkillFlowStore().session?.request).toMatchObject({
+      scope: 'instance',
+      gpu: 'H100 SXM'
+    })
+    expect(
+      screen.getByText('acme_hero_lora_v5.safetensors · 128 MB')
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText('studio_materials_v2.safetensors · 256 MB')
+    ).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Cancel upload' }))
+    expect(
+      useSkillFlowStore().events.some((event) => event.step === 'push')
+    ).toBe(false)
+    expect(screen.getByRole('alert')).toHaveTextContent(/prepared, not run/i)
+  })
+
   it('blocks the custom build until its simulated local upload is approved', async () => {
     const user = userEvent.setup({
       advanceTimers: vi.advanceTimersByTime,
@@ -92,6 +130,10 @@ describe('Agent route and approval decisions', () => {
     s.startAgentHandoff()
     render(HomesteadAgentSetup, { global: { plugins: [i18n] } })
     await vi.runAllTimersAsync()
+    await user.selectOptions(
+      screen.getByRole('combobox', { name: 'GPU' }),
+      'RTX PRO 6000'
+    )
     await user.click(screen.getByRole('button', { name: 'Confirm build plan' }))
     await vi.runAllTimersAsync()
     expect(s.build.phase).toBe('idle')
