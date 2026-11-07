@@ -31,6 +31,14 @@ export const useExtensionManagerStore = defineStore(
     const target = computed(
       () => state.value.environments[state.value.targetId]
     )
+    const changes = computed(() =>
+      [
+        ...new Set([
+          ...Object.keys(target.value.packs),
+          ...Object.keys(state.value.draft.packs)
+        ])
+      ].filter((id) => target.value.packs[id] !== state.value.draft.packs[id])
+    )
     function extensionEnvironment(
       environment: Environment
     ): ExtensionEnvironment {
@@ -193,7 +201,7 @@ export const useExtensionManagerStore = defineStore(
           'alex@studio.example, sam@studio.example (all workspace admins)',
         kind: 'request'
       })
-      panel.value = null
+      panel.value = 'status'
     }
     function reviewRequest() {
       role.value = 'admin'
@@ -226,6 +234,7 @@ export const useExtensionManagerStore = defineStore(
       inbox,
       requestPending,
       target,
+      changes,
       selectedEnvironment,
       locked,
       editable,

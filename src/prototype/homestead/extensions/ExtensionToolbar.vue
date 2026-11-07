@@ -24,7 +24,11 @@ function seedJobs() {
         ? text('standardCloud')
         : text('environment', s.selectedEnvironment)
     }}</span>
-    <Button size="sm" variant="secondary" @click="s.edit()"
+    <Button
+      size="sm"
+      variant="secondary"
+      data-testid="extension-manager-open"
+      @click="s.edit()"
       ><i class="icon-[lucide--blocks] size-4" />{{ text('title') }}</Button
     >
     <Button size="sm" variant="muted-textonly" @click="s.panel = 'status'"

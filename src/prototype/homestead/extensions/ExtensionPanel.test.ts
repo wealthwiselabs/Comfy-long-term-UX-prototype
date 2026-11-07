@@ -1,10 +1,11 @@
 import '@testing-library/jest-dom/vitest'
-import { render, screen } from '@testing-library/vue'
+import { render, screen, waitFor, within } from '@testing-library/vue'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { nextTick } from 'vue'
 import { i18n } from '@/i18n'
 import ExtensionPanel from './ExtensionPanel.vue'
+import ExtensionToolbar from './ExtensionToolbar.vue'
 import { useExtensionManagerStore } from './store'
 
 describe('extension manager panel', () => {
@@ -21,6 +22,7 @@ describe('extension manager panel', () => {
     const user = userEvent.setup()
     const s = useExtensionManagerStore()
     render(ExtensionPanel, { global: { plugins: [i18n] } })
+    await screen.findByRole('dialog', { name: 'Node packs' })
     await user.selectOptions(
       screen.getByRole('combobox', { name: 'Version for ComfyUI Impact Pack' }),
       '8.29.1'
@@ -34,11 +36,14 @@ describe('extension manager panel', () => {
     await user.click(
       screen.getByRole('button', { name: 'Close Extensions panel' })
     )
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     expect(screen.queryByRole('complementary')).not.toBeInTheDocument()
     s.edit()
     await nextTick()
     expect(
-      screen.getByRole('combobox', { name: 'Version for ComfyUI Impact Pack' })
+      await screen.findByRole('combobox', {
+        name: 'Version for ComfyUI Impact Pack'
+      })
     ).toHaveValue('8.29.1')
     expect(screen.getByText('studio-nodes.zip')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Review changes · 2' }))
@@ -57,6 +62,120 @@ describe('extension manager panel', () => {
     expect(
       screen.getByText('Storage: 48 GB × $0.07 / GB-month ≈ $3.36 / month.')
     ).toBeInTheDocument()
+  })
+
+  it('filters installed upgrades with descriptions and keeps pending changes distinct from installed versions', async () => {
+    const user = userEvent.setup()
+    render(ExtensionPanel, { global: { plugins: [i18n] } })
+    expect(
+      await screen.findByRole('dialog', { name: 'Node packs' })
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: 'All packs · 7' })
+    ).toHaveAttribute('aria-pressed', 'true')
+    await user.click(
+      screen.getByRole('button', { name: 'Updates available · 2' })
+    )
+    expect(screen.getAllByRole('row')).toHaveLength(3)
+    expect(
+      screen.queryByRole('row', { name: /ComfyUI-RMBG/ })
+    ).not.toBeInTheDocument()
+    const impact = screen.getByRole('row', { name: /ComfyUI Impact Pack/ })
+    expect(
+      within(impact).getByText(
+        'Detection, segmentation, and detail refinement.'
+      )
+    ).toBeInTheDocument()
+    expect(within(impact).getByText('Installed 8.28.3')).toBeInTheDocument()
+    expect(within(impact).getByText('Available 8.29.1')).toBeInTheDocument()
+    await user.selectOptions(within(impact).getByRole('combobox'), '8.29.1')
+    expect(within(impact).getByText('Pending update')).toBeInTheDocument()
+    expect(within(impact).getByText('Installed 8.28.3')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'All packs · 7' }))
+    await user.type(
+      screen.getByRole('textbox', { name: 'Search node packs' }),
+      'remove backgrounds'
+    )
+    expect(screen.getAllByRole('row')).toHaveLength(2)
+    expect(
+      screen.getByRole('row', { name: /ComfyUI-RMBG/ })
+    ).toBeInTheDocument()
+  })
+
+  it('dismisses with Escape and returns focus to the Extensions opener', async () => {
+    const user = userEvent.setup()
+    render(
+      {
+        components: { ExtensionToolbar, ExtensionPanel },
+        template: '<ExtensionToolbar /><ExtensionPanel />'
+      },
+      { global: { plugins: [i18n] } }
+    )
+    await screen.findByRole('dialog', { name: 'Node packs' })
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: 'Close Extensions panel' })
+      ).toHaveFocus()
+    )
+    await user.keyboard('{Escape}')
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    )
+    expect(screen.getByRole('button', { name: 'Extensions' })).toHaveFocus()
+    await user.click(screen.getByRole('button', { name: 'Extensions' }))
+    expect(
+      await screen.findByRole('dialog', { name: 'Node packs' })
+    ).toBeInTheDocument()
+  })
+
+  it('closes modal review and opens a nonblocking status panel when preparing', async () => {
+    const user = userEvent.setup()
+    const s = useExtensionManagerStore()
+    render(ExtensionPanel, { global: { plugins: [i18n] } })
+    await screen.findByRole('dialog', { name: 'Node packs' })
+    await user.selectOptions(
+      screen.getByRole('combobox', { name: 'Version for ComfyUI-RMBG' }),
+      '2.0.0'
+    )
+    await user.click(screen.getByRole('button', { name: 'Review changes · 1' }))
+    expect(
+      screen.getByRole('dialog', { name: 'Review environment' })
+    ).toBeInTheDocument()
+    await user.click(
+      screen.getByRole('button', { name: 'Prepare environment' })
+    )
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(
+      await screen.findByRole('complementary', { name: 'Extensions' })
+    ).toBeInTheDocument()
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Preparing in background'
+    )
+    expect(s.locked).toBe(false)
+  })
+
+  it('closes the request modal and opens request status before preselected admin review', async () => {
+    const user = userEvent.setup()
+    const s = useExtensionManagerStore()
+    s.reset('member')
+    render(ExtensionPanel, { global: { plugins: [i18n] } })
+    await screen.findByRole('dialog', { name: 'Node packs' })
+    await user.selectOptions(
+      screen.getByRole('combobox', { name: 'Version for ComfyUI-RMBG' }),
+      '2.0.0'
+    )
+    await user.click(
+      screen.getByRole('button', { name: 'Request selected changes' })
+    )
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(await screen.findByRole('complementary')).toHaveTextContent(
+      'Request sent to workspace admins'
+    )
+    s.reviewRequest()
+    await nextTick()
+    expect(
+      await screen.findByRole('dialog', { name: 'Review environment' })
+    ).toHaveTextContent('ComfyUI-RMBG: Not installed → 2.0.0')
   })
 
   it('requires the approval button before locking Run and waiting for running and queued jobs', async () => {
@@ -81,12 +200,12 @@ describe('extension manager panel', () => {
     )
   })
 
-  it('sends first-time users to the existing build UI without showing a creation wizard', () => {
+  it('sends first-time users to the existing build UI without showing a creation wizard', async () => {
     const s = useExtensionManagerStore()
     s.reset('first')
     render(ExtensionPanel, { global: { plugins: [i18n] } })
     expect(
-      screen.getByRole('link', { name: 'Create a custom environment' })
+      await screen.findByRole('link', { name: 'Create a custom environment' })
     ).toHaveAttribute('href', 'https://platform.comfy.org/profile/builds/new')
     expect(screen.queryByRole('combobox')).not.toBeInTheDocument()
     expect(
