@@ -14,11 +14,12 @@ import { useSubgraphNavigationStore } from '@/stores/subgraphNavigationStore'
 
 type MockSubgraph = Pick<Subgraph, 'id' | 'rootGraph' | '_nodes' | 'nodes'>
 
-const { routeHash, routerPush, routerReplace, routerHistory } =
+const { routeHash, routeQuery, routerPush, routerReplace, routerHistory } =
   await vi.hoisted(async () => {
     const { ref } = await import('vue')
     return {
       routeHash: ref(''),
+      routeQuery: ref<Record<string, string>>({}),
       routerPush: vi.fn(),
       routerReplace: vi.fn(),
       routerHistory: { state: {} }
@@ -90,6 +91,13 @@ vi.mock<unknown>(import('vue-router'), () => ({
   NavigationFailureType: { cancelled: 8, duplicated: 16 },
   isNavigationFailure: vi.fn(() => false),
   useRouter: () => ({
+    currentRoute: {
+      value: {
+        get query() {
+          return routeQuery.value
+        }
+      }
+    },
     push: routerPush,
     replace: routerReplace,
     options: { history: routerHistory }
@@ -111,6 +119,7 @@ describe('useSubgraphNavigationStore', () => {
     app.canvas.ds.state.offset = [0, 0]
     app.graph.getNodeById = vi.fn()
     routeHash.value = ''
+    routeQuery.value = {}
     routerHistory.state = {}
     routerPush.mockReset().mockImplementation(async (target) => {
       applyRouteTarget(target)
@@ -328,6 +337,19 @@ describe('useSubgraphNavigationStore', () => {
 
     // Stack should be cleared when activeSubgraph becomes undefined
     expect(navigationStore.exportState()).toHaveLength(0)
+  })
+
+  it('preserves existing query parameters when synchronizing the graph hash', async () => {
+    routeQuery.value = { v: '2', flow: 'extensions' }
+    const navigationStore = useSubgraphNavigationStore()
+    await navigationStore.updateHash()
+    await navigationStore.updateHash()
+    expect(routerReplace).toHaveBeenCalledWith(
+      expect.objectContaining({
+        query: { v: '2', flow: 'extensions' },
+        hash: '#current-root'
+      })
+    )
   })
 
   it('does not reopen workflows for hashes written during graph changes', async () => {

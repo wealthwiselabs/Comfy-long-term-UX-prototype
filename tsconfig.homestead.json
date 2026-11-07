@@ -7,7 +7,9 @@
   "include": [
     "src/prototype/homestead/**/*.ts",
     "src/prototype/homestead/**/*.vue",
-    "global.d.ts"
+    "global.d.ts",
+    "src/types/**/*.d.ts",
+    "src/lib/litegraph/src/types/disposable.d.ts"
   ],
   "exclude": []
 }

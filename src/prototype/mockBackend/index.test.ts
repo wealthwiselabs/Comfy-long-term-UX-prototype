@@ -4,7 +4,8 @@ import {
   COLD_START_MS,
   installMockBackend,
   onMockRunStateChange,
-  setMockDeployment
+  setMockDeployment,
+  setMockRunAdmission
 } from './index'
 import type { MockRunState } from './index'
 
@@ -30,6 +31,7 @@ describe('mockBackend', () => {
   afterEach(() => {
     vi.useRealTimers()
     setMockDeployment(comfyCloud)
+    setMockRunAdmission(() => true)
   })
 
   it("serves the current deployment's packs and models as node definitions", async () => {
@@ -65,6 +67,24 @@ describe('mockBackend', () => {
     vi.advanceTimersByTime(COLD_START_MS)
     expect(states).toEqual(['starting', 'idle'])
     stop()
+  })
+
+  it('rejects every submission path while environment admissions are locked', async () => {
+    setMockRunAdmission(() => false)
+    const blocked = await fetch('/prototype/api/prompt', {
+      method: 'POST',
+      body: '{}'
+    })
+    expect(blocked.status).toBe(409)
+    expect(await blocked.json()).toMatchObject({
+      error: { type: 'environment_applying' }
+    })
+    setMockRunAdmission(() => true)
+    const resumed = await fetch('/prototype/api/prompt', {
+      method: 'POST',
+      body: '{}'
+    })
+    expect(resumed.status).toBe(200)
   })
 
   it('runs straight away on Comfy Cloud', async () => {

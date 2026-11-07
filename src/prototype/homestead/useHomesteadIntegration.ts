@@ -7,9 +7,11 @@ import { usePrototypeUiStore } from '../stores/uiStore'
 import { nativeFixtures } from './nativeModel'
 import { compatibility } from './model'
 import { useHomesteadStore } from './store'
+import { useExtensionManagerStore } from './extensions/store'
 
 export function useHomesteadIntegration() {
   const s = useHomesteadStore()
+  const extensions = useExtensionManagerStore()
   const route = useRoute()
   const personas = usePrototypePersonaStore()
   const tabs = usePrototypeTabsStore()
@@ -114,6 +116,14 @@ export function useHomesteadIntegration() {
   }
   onMounted(() => {
     if (!s.enabled) return
+    if (extensions.enabled) {
+      s.setVersion(2)
+      const workflow =
+        s.workflows.find((item) => item.id !== 'matte') ?? s.active
+      s.openWorkflow(workflow.id, 'cloud')
+      extensions.initialize()
+      return
+    }
     if (route.query.entry === 'deployment') {
       const deployment = s.availableEnvironments.find(
         (environment) => environment.id === route.query.environment

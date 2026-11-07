@@ -23,7 +23,8 @@
     @dragleave="onFileDragLeave"
     @drop.capture="onFileDrop"
   >
-    <HomesteadToolbar v-if="homestead.enabled" />
+    <ExtensionToolbar v-if="homestead.enabled && extensions.enabled" />
+    <HomesteadToolbar v-else-if="homestead.enabled" />
     <HomesteadMemoryBanner v-if="homestead.enabled && isEditorTabActive" />
     <div class="relative flex min-h-0 flex-1">
       <div v-if="isMediaAssetsTabActive" class="relative flex min-h-0 flex-1">
@@ -60,7 +61,8 @@
         </main>
       </div>
       <RealEditor />
-      <HomesteadPanels v-if="homestead.enabled" />
+      <ExtensionPanel v-if="homestead.enabled && extensions.enabled" />
+      <HomesteadPanels v-else-if="homestead.enabled" />
 
       <BuildReadyToast
         v-if="readyProject"
@@ -111,7 +113,10 @@
       </div>
     </div>
 
-    <div v-if="showDemoControls" class="fixed bottom-4 left-64 z-50">
+    <div
+      v-if="showDemoControls && !extensions.enabled"
+      class="fixed bottom-4 left-64 z-50"
+    >
       <DemoControls />
     </div>
 
@@ -130,6 +135,9 @@
 import { cn } from '@comfyorg/tailwind-utils'
 import { storeToRefs } from 'pinia'
 import { computed, ref } from 'vue'
+import ExtensionToolbar from '../homestead/extensions/ExtensionToolbar.vue'
+import ExtensionPanel from '../homestead/extensions/ExtensionPanel.vue'
+import { useExtensionManagerStore } from '../homestead/extensions/store'
 import HomesteadToolbar from '../homestead/HomesteadToolbar.vue'
 import HomesteadMemoryBanner from '../homestead/HomesteadMemoryBanner.vue'
 import HomesteadPanels from '../homestead/HomesteadPanels.vue'
@@ -166,6 +174,7 @@ import TemplatesView from '../views/TemplatesView.vue'
 
 const { t } = useI18n()
 const homestead = useHomesteadIntegration()
+const extensions = useExtensionManagerStore()
 const uiStore = usePrototypeUiStore()
 const tabsStore = usePrototypeTabsStore()
 const personaStore = usePrototypePersonaStore()

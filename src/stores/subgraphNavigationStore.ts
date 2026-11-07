@@ -382,6 +382,7 @@ export const useSubgraphNavigationStore = defineStore(
       const writeId = ++routeWriteId
       pendingRouteWrites.set(writeId, hash)
       const target = {
+        query: router.currentRoute.value.query,
         hash,
         state: { [routeWriteStateKey]: writeId }
       }

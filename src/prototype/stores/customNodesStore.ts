@@ -13,6 +13,7 @@
 // is a new release of the shared deployment: a confirm, then a background
 // build. Runs stay on the current release until the new one is ready.
 
+import { useExtensionManagerStore } from '../homestead/extensions/store'
 import { useHomesteadStore } from '../homestead/store'
 import { useIntervalFn } from '@vueuse/core'
 import { defineStore } from 'pinia'
@@ -189,6 +190,11 @@ export const usePrototypeCustomNodesStore = defineStore(
     )
 
     function open() {
+      const extensions = useExtensionManagerStore()
+      if (homestead.enabled && extensions.enabled) {
+        extensions.edit()
+        return
+      }
       if (homestead.enabled && homestead.version === 1) {
         homestead.dialog = 'nodesInfo'
         return

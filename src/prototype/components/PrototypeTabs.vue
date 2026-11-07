@@ -26,7 +26,9 @@
       :href="
         router.resolve({
           name: homestead.enabled ? 'HomesteadPrototype' : 'PrototypeDashboard',
-          query: homestead.enabled ? { v: homestead.version } : {}
+          query: homestead.enabled
+            ? { ...route.query, v: homestead.version }
+            : {}
         }).href
       "
       variant="muted-textonly"
@@ -224,7 +226,7 @@ async function onSelectHome(event: MouseEvent) {
   uiStore.goHome()
   await router.push({
     name: homestead.enabled ? 'HomesteadPrototype' : 'PrototypeDashboard',
-    query: homestead.enabled ? { v: homestead.version } : {}
+    query: homestead.enabled ? { ...route.query, v: homestead.version } : {}
   })
 }
 
@@ -232,7 +234,7 @@ async function onSelectTab(id: string) {
   tabsStore.select(id)
   await router.push({
     name: homestead.enabled ? 'HomesteadPrototype' : 'PrototypeDashboard',
-    query: homestead.enabled ? { v: homestead.version } : {}
+    query: homestead.enabled ? { ...route.query, v: homestead.version } : {}
   })
 }
 </script>

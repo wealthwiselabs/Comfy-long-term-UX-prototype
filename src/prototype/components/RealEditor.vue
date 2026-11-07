@@ -114,11 +114,12 @@
 
 <script setup lang="ts">
 import Button from '@/components/ui/button/Button.vue'
+import { useExtensionManagerStore } from '../homestead/extensions/store'
 import HomesteadJobStatus from '../homestead/HomesteadJobStatus.vue'
 import { useHomesteadStore } from '../homestead/store'
 import { cn } from '@comfyorg/tailwind-utils'
 import { until, useEventListener } from '@vueuse/core'
-import { computed, onMounted, ref, toRaw, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, toRaw, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { LiteGraph } from '@/lib/litegraph/src/litegraph'
@@ -134,7 +135,7 @@ import GraphView from '@/views/GraphView.vue'
 import { useProjectWorkflowsSidebarTab } from '../composables/useProjectWorkflowsSidebarTab'
 import { demoWorkflowGraph } from '../fixtures/demoWorkflowGraphs'
 import { MATTE_PASS_GRAPH } from '../fixtures/mattePassGraph'
-import { setMockDeployment } from '../mockBackend'
+import { setMockDeployment, setMockRunAdmission } from '../mockBackend'
 import { objectInfo, PACK_NODE_TYPES } from '../mockBackend/nodeDefs'
 import { usePrototypeCustomCloudStore } from '../stores/customCloudStore'
 import { usePrototypePolicyStore } from '../stores/policyStore'
@@ -146,6 +147,7 @@ const QUIET_LOAD = { deferWarnings: true, silentAssetErrors: true }
 
 const { t } = useI18n()
 const homestead = useHomesteadStore()
+const extensions = useExtensionManagerStore()
 const customCloud = usePrototypeCustomCloudStore()
 const tabsStore = usePrototypeTabsStore()
 const policies = usePrototypePolicyStore()
@@ -266,14 +268,21 @@ async function syncEditor() {
       await registerDeploymentNodes()
       registeredKey = nodeDefsKey.value
     }
+    if (extensions.enabled && changed && extensions.state.phase === 'updated')
+      return
     await showActiveTab(changed)
   })
 }
 
 onMounted(() => {
+  setMockRunAdmission(
+    () => !homestead.enabled || !extensions.enabled || extensions.run()
+  )
   customCloud.editorMounted = true
   void syncEditor()
 })
+
+onUnmounted(() => setMockRunAdmission(() => true))
 
 watch(() => JSON.stringify(runnable.value), syncEditor)
 watch(() => activeTab.value?.id, syncEditor)
@@ -297,6 +306,13 @@ useEventListener(
   (event: MouseEvent) => {
     const target = event.target
     if (!(target instanceof Element) || !target.closest(RUN_BUTTON)) return
+    if (homestead.enabled && extensions.enabled) {
+      event.preventDefault()
+      event.stopImmediatePropagation()
+      if (!extensions.locked) customCloud.runRequested = true
+      else extensions.panel = 'status'
+      return
+    }
     if (homestead.enabled) {
       event.preventDefault()
       event.stopImmediatePropagation()

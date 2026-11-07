@@ -20,9 +20,16 @@
             )
           "
         />
-        <Suspense @resolve="comfyRunButtonResolved">
-          <ComfyRunButton v-coachmark="FIRST_RUN_COACH_IDS.runButton" />
-        </Suspense>
+        <fieldset
+          :disabled="
+            homestead.enabled && extensions.enabled && extensions.locked
+          "
+          class="m-0 border-0 p-0"
+        >
+          <Suspense @resolve="comfyRunButtonResolved">
+            <ComfyRunButton v-coachmark="FIRST_RUN_COACH_IDS.runButton" />
+          </Suspense>
+        </fieldset>
         <HomesteadCloudButton />
         <Button
           v-tooltip.bottom="cancelJobTooltipConfig"
@@ -113,6 +120,8 @@ import { useSidebarTabStore } from '@/stores/workspace/sidebarTabStore'
 import { cn } from '@comfyorg/tailwind-utils'
 
 import ComfyRunButton from './ComfyRunButton'
+import { useExtensionManagerStore } from '@/prototype/homestead/extensions/store'
+import { useHomesteadStore } from '@/prototype/homestead/store'
 import HomesteadCloudButton from '@/prototype/homestead/HomesteadCloudButton.vue'
 
 const { dockedProgressContainer, queueOverlayExpanded = false } = defineProps<{
@@ -129,6 +138,8 @@ const emit = defineEmits<{
   (event: 'update:progressTarget', target: HTMLElement | null): void
 }>()
 
+const homestead = useHomesteadStore()
+const extensions = useExtensionManagerStore()
 const settingStore = useSettingStore()
 const commandStore = useCommandStore()
 const executionStore = useExecutionStore()

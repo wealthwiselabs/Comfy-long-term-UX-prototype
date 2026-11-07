@@ -29,6 +29,7 @@ export const COLD_START_MS = 4000
 
 let deployment: MockDeployment = { nodePacks: [], models: [], coldStart: false }
 let promptCount = 0
+let admitRun: () => boolean = () => true
 const runStateListeners = new Set<(state: MockRunState) => void>()
 
 // Prototype defaults: no first-run tours, no unload prompt (Reset demo
@@ -100,6 +101,20 @@ function queuePrompt(body: string | undefined) {
         node_errors: nodeErrors
       },
       400
+    )
+  if (!admitRun())
+    return json(
+      {
+        error: {
+          type: 'environment_applying',
+          message: 'New runs are paused while the environment is applying.',
+          details:
+            'Accepted running and queued jobs finish on the old environment.',
+          extra_info: {}
+        },
+        node_errors: {}
+      },
+      409
     )
   promptCount += 1
   if (deployment.coldStart) {
@@ -228,6 +243,10 @@ class FakeSocket extends EventTarget {
       new MessageEvent('message', { data: JSON.stringify(message) })
     )
   }
+}
+
+export function setMockRunAdmission(admit: () => boolean) {
+  admitRun = admit
 }
 
 export function setMockDeployment(next: MockDeployment) {
