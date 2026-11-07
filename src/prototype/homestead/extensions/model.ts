@@ -7,13 +7,10 @@ export interface ExtensionEnvironment {
   gpu: string
   storage: number
 }
-export interface ExtensionDraft extends Omit<
-  ExtensionEnvironment,
-  'id' | 'revision'
-> {
+interface ExtensionDraft extends Omit<ExtensionEnvironment, 'id' | 'revision'> {
   mode: 'update' | 'new'
 }
-export interface ExtensionJob {
+interface ExtensionJob {
   id: number
   environmentId: string
   revision: number
