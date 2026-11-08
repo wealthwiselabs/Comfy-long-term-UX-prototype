@@ -28,7 +28,7 @@ const modelText = computed({
     <div class="space-y-5">
       <fieldset class="m-0 min-w-0 space-y-2 border-0 p-0">
         <legend class="mb-2 p-0 font-medium">{{ text('destination') }}</legend>
-        <label class="flex gap-2"
+        <label v-if="!s.firstSetup" class="flex gap-2"
           ><input
             v-model="s.state.draft.mode"
             type="radio"
@@ -49,7 +49,10 @@ const modelText = computed({
           class="m-0 rounded-lg bg-secondary-background p-3 text-xs leading-5 text-muted-foreground"
         >
           {{
-            text(s.state.draft.mode === 'update' ? 'sharedEffect' : 'newEffect')
+            text(
+              s.state.draft.mode === 'update' ? 'sharedEffect' : 'newEffect',
+              { name: s.target.name }
+            )
           }}
         </p>
       </fieldset>
@@ -57,7 +60,9 @@ const modelText = computed({
         :disabled="!s.editable"
         class="m-0 min-w-0 space-y-3 border-0 p-0"
       >
-        <legend class="mb-2 p-0 font-medium">{{ text('settings') }}</legend>
+        <legend class="mb-2 p-0 font-medium">
+          {{ text(s.firstSetup ? 'firstSettings' : 'settings') }}
+        </legend>
         <label class="block text-xs"
           >{{ text('name')
           }}<input
@@ -88,6 +93,23 @@ const modelText = computed({
             class="mt-1 w-full rounded-sm border border-border-default bg-base-background p-2"
         /></label>
       </fieldset>
+      <p
+        v-if="s.firstSetup"
+        class="m-0 text-xs leading-5 text-muted-foreground"
+      >
+        {{
+          text('gpuSuggestion', {
+            gpu: s.gpuSuggestion,
+            models: s.state.draft.models.join(', ') || text('noWorkflowModels')
+          })
+        }}
+      </p>
+      <p
+        v-if="s.firstSetup"
+        class="m-0 text-xs leading-5 text-muted-foreground"
+      >
+        {{ text('firstStorageEstimate') }}
+      </p>
     </div>
     <div class="space-y-5">
       <section class="space-y-2 rounded-lg border border-border-default p-4">

@@ -1,9 +1,16 @@
 import { defineStore } from 'pinia'
 import { computed, onScopeDispose, ref, toRaw } from 'vue'
 import { useHomesteadStore } from '../store'
-import { canRun, initialState, transition } from './model'
+import {
+  canRun,
+  firstEnvironmentState,
+  initialState,
+  suggestedGpu,
+  transition
+} from './model'
 import type { ExtensionEvent, ExtensionEnvironment } from './model'
-import type { Environment } from '../model'
+import type { Environment, Workflow } from '../model'
+import { demoWorkflowGraph } from '../../fixtures/demoWorkflowGraphs'
 
 export const useExtensionManagerStore = defineStore(
   'extension-manager-prototype',
@@ -18,6 +25,12 @@ export const useExtensionManagerStore = defineStore(
     const excludedVersions = ref<Record<string, string>>({})
     const panel = ref<'packs' | 'review' | 'status' | null>('packs')
     const scenario = ref<'existing' | 'first' | 'member'>('existing')
+    const firstSetup = computed(
+      () =>
+        state.value.targetId === 'dep-comfy-cloud' &&
+        state.value.phase !== 'updated'
+    )
+    const gpuSuggestion = computed(() => suggestedGpu(state.value.draft.models))
     const role = ref<'admin' | 'member'>('admin')
     const failure = ref(false)
     const holdJobs = ref(false)
@@ -91,16 +104,12 @@ export const useExtensionManagerStore = defineStore(
       const workflow = homestead.workflows.find(
         (item) => item.id === workflowId
       )
-      if (workflow)
-        workflow.environmentId =
-          scenario.value === 'first'
-            ? 'dep-comfy-cloud'
-            : state.value.sessions.you
+      if (workflow) workflow.environmentId = state.value.sessions.you
       homestead.runtime = 'ready'
     }
     function dispatch(event: ExtensionEvent) {
       const previous = state.value.phase
-      state.value = transition(state.value, event)
+      state.value = transition(toRaw(state.value), event)
       if (state.value.phase === previous) return
       if (state.value.phase === 'ready' || state.value.phase === 'failed') {
         inbox.value.push({
@@ -117,6 +126,8 @@ export const useExtensionManagerStore = defineStore(
             ? (initiatingWorkflowId.value ?? undefined)
             : undefined
         )
+        if (state.value.targetId === 'dep-comfy-cloud')
+          scenario.value = 'existing'
         if (requestPending.value) {
           inbox.value.push({
             title: state.value.environments[state.value.sessions.you].name,
@@ -128,12 +139,17 @@ export const useExtensionManagerStore = defineStore(
       }
     }
     function initialize() {
-      syncEnvironment(homestead.activeId)
+      if (
+        new URLSearchParams(window.location.search).get('scenario') === 'first'
+      )
+        reset('first')
+      else syncEnvironment(homestead.activeId)
     }
     function prepare() {
       if (role.value !== 'admin' || !editable.value) return
       if (state.value.phase !== 'failed')
         initiatingWorkflowId.value = homestead.activeId
+      if (firstSetup.value) state.value.draft.mode = 'new'
       dispatch({ type: 'prepare' })
       panel.value = 'status'
       const generation = state.value.generation
@@ -170,22 +186,49 @@ export const useExtensionManagerStore = defineStore(
       if (!editable.value) return
       if (state.value.phase === 'updated') {
         excludedVersions.value = {}
-        state.value.environments[homestead.environment.id] =
+        const id =
+          state.value.targetId === 'dep-comfy-cloud' &&
+          state.value.draft.mode === 'new'
+            ? state.value.sessions.you
+            : homestead.environment.id
+        const environment =
+          state.value.environments[id] ??
           extensionEnvironment(homestead.environment)
-        state.value.targetId = homestead.environment.id
-        state.value.sessions.you = homestead.environment.id
-        state.value.draft = {
-          ...structuredClone(toRaw(selectedEnvironment.value)),
-          mode: 'update'
-        }
+        state.value.environments[id] = environment
+        state.value.targetId = id
+        state.value.sessions.you = id
+        state.value.draft =
+          id === 'dep-comfy-cloud'
+            ? firstEnvironmentState(workflowModels(homestead.active)).draft
+            : {
+                ...structuredClone(toRaw(environment)),
+                mode: 'update'
+              }
         state.value.phase = 'idle'
       }
       panel.value = 'packs'
     }
+    function workflowModels(workflow: Workflow) {
+      if (workflow.models.length) return [...workflow.models]
+      return [
+        ...new Set(
+          demoWorkflowGraph(workflow)
+            .nodes.flatMap((node) => node.widgets_values ?? [])
+            .filter(
+              (value): value is string =>
+                typeof value === 'string' &&
+                /\.(safetensors|ckpt|gguf)$/i.test(value)
+            )
+        )
+      ]
+    }
     function reset(next: typeof scenario.value) {
       timers.forEach(clearTimeout)
       timers.clear()
-      state.value = initialState()
+      state.value =
+        next === 'first'
+          ? firstEnvironmentState(workflowModels(homestead.active))
+          : initialState()
       excludedVersions.value = {}
       scenario.value = next
       role.value = next === 'member' ? 'member' : 'admin'
@@ -232,6 +275,8 @@ export const useExtensionManagerStore = defineStore(
       excludedVersions,
       panel,
       scenario,
+      firstSetup,
+      gpuSuggestion,
       role,
       failure,
       holdJobs,

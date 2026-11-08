@@ -56,6 +56,38 @@ export function initialState(): ExtensionState {
     sessions: { you: 'studio', teammate: 'studio', unrelated: 'other' }
   }
 }
+export function suggestedGpu(models: string[]) {
+  return models.some((model) => /flux|hidream/i.test(model))
+    ? 'A100 · 80 GB'
+    : 'L40S · 48 GB'
+}
+export function firstEnvironmentState(models: string[]): ExtensionState {
+  const cloud: ExtensionEnvironment = {
+    id: 'dep-comfy-cloud',
+    name: 'Comfy Cloud',
+    revision: 1,
+    packs: {},
+    models: [],
+    gpu: 'Comfy Cloud',
+    storage: 0
+  }
+  return {
+    phase: 'idle',
+    targetId: cloud.id,
+    generation: 0,
+    environments: { [cloud.id]: cloud },
+    draft: {
+      name: 'My custom environment',
+      mode: 'new',
+      packs: {},
+      models: [...models],
+      gpu: suggestedGpu(models),
+      storage: models.length ? 16 : 0
+    },
+    jobs: [],
+    sessions: { you: cloud.id, teammate: cloud.id, unrelated: 'other' }
+  }
+}
 export function canRun(state: ExtensionState, environmentId: string) {
   return !(
     ['waiting', 'applying'].includes(state.phase) &&
@@ -70,7 +102,15 @@ export function transition(
   switch (event.type) {
     case 'prepare':
       if (!['idle', 'failed', 'updated'].includes(state.phase)) return state
-      return { ...state, phase: 'preparing', generation: state.generation + 1 }
+      return {
+        ...state,
+        phase: 'preparing',
+        generation: state.generation + 1,
+        draft:
+          state.targetId === 'dep-comfy-cloud'
+            ? { ...state.draft, mode: 'new' }
+            : state.draft
+      }
     case 'ready':
       return state.phase === 'preparing' ? { ...state, phase: 'ready' } : state
     case 'fail':
@@ -134,7 +174,11 @@ export function transition(
       }
     }
     case 'apply': {
-      if (state.phase !== 'applying') return state
+      if (
+        state.phase !== 'applying' ||
+        (state.targetId === 'dep-comfy-cloud' && state.draft.mode === 'update')
+      )
+        return state
       const source = state.environments[state.targetId]
       const id =
         state.draft.mode === 'new'

@@ -92,36 +92,14 @@ const managerOpen = computed({
             ></DialogClose>
           </div>
           <DialogDescription class="m-0">{{
-            s.scenario === 'first'
-              ? text('firstTitle')
-              : text('target', s.target)
+            s.firstSetup ? text('firstBody') : text('target', s.target)
           }}</DialogDescription></DialogHeader
         >
-        <div
-          v-if="s.scenario === 'first'"
-          class="min-h-0 flex-1 space-y-5 overflow-auto p-6 text-sm"
-        >
-          <i class="icon-[lucide--blocks] size-8 text-muted-foreground" />
-          <h3 class="text-lg font-medium">{{ text('firstTitle') }}</h3>
-          <p class="m-0 leading-6 text-muted-foreground">
-            {{ text('firstBody') }}
-          </p>
-          <Button
-            as="a"
-            href="https://platform.comfy.org/profile/builds/new"
-            target="_blank"
-            rel="noopener noreferrer"
-            >{{ text('create') }}<i class="icon-[lucide--external-link] size-4"
-          /></Button>
-          <p class="m-0 text-xs text-muted-foreground">{{ text('handoff') }}</p>
-        </div>
-        <PackCatalog v-else-if="s.panel === 'packs'" />
+        <PackCatalog v-if="s.panel === 'packs'" />
         <div v-else class="min-h-0 flex-1 overflow-auto">
           <ExtensionReview />
         </div>
-        <DialogFooter
-          v-if="s.scenario !== 'first'"
-          class="shrink-0 border-t border-border-subtle px-6 pt-4"
+        <DialogFooter class="shrink-0 border-t border-border-subtle px-6 pt-4"
           ><p class="m-0 mr-auto text-xs text-muted-foreground">
             {{ text('approvalReminder') }}
           </p>
@@ -208,7 +186,9 @@ const managerOpen = computed({
             text(
               s.requestPending && s.state.phase === 'idle'
                 ? 'tipRequestSent'
-                : `tip${phaseKey}`
+                : s.state.phase === 'applying' && s.state.draft.mode === 'new'
+                  ? 'tipApplyingNew'
+                  : `tip${phaseKey}`
             )
           }}
         </p>

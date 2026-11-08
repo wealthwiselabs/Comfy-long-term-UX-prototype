@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { toRaw } from 'vue'
 import { useHomesteadStore } from '../store'
 import { useExtensionManagerStore } from './store'
 
@@ -116,6 +117,97 @@ describe('extension prototype commands', () => {
       ['studio', 12],
       ['fast', 4]
     ])
+  })
+
+  it('creates first in Cloud after failure/retry and approval without moving a different active workflow', () => {
+    const s = useExtensionManagerStore()
+    const homestead = useHomesteadStore()
+    homestead.active.models = ['z_image_turbo_bf16.safetensors']
+    s.reset('first')
+    const initiator = homestead.active
+    const source = structuredClone(
+      toRaw(s.state.environments['dep-comfy-cloud'])
+    )
+    expect(s.state.draft).toMatchObject({
+      mode: 'new',
+      packs: {},
+      models: ['z_image_turbo_bf16.safetensors'],
+      gpu: 'L40S · 48 GB',
+      storage: 16
+    })
+    expect(initiator.environmentId).toBe('dep-comfy-cloud')
+    homestead.workflows.push({ ...initiator, id: 'another-cloud-workflow' })
+    s.state.draft.packs['comfyui-rmbg'] = '2.0.0'
+    s.holdJobs = true
+    s.failure = true
+    s.prepare()
+    expect(s.run()).toBe(true)
+    vi.advanceTimersByTime(5500)
+    expect(s.state.phase).toBe('failed')
+    expect(initiator.environmentId).toBe('dep-comfy-cloud')
+    expect(s.state.environments['dep-comfy-cloud']).toEqual(source)
+    expect(s.state.draft.packs['comfyui-rmbg']).toBe('2.0.0')
+    homestead.activeId = 'another-cloud-workflow'
+    s.failure = false
+    s.prepare()
+    vi.advanceTimersByTime(5500)
+    expect(s.state.phase).toBe('ready')
+    expect(initiator.environmentId).toBe('dep-comfy-cloud')
+    expect(s.run()).toBe(true)
+    s.dispatch({ type: 'approve' })
+    expect(s.state.phase).toBe('applying')
+    expect(s.locked).toBe(false)
+    vi.advanceTimersByTime(1600)
+    expect(initiator.environmentId).toBe('dep-comfy-cloud-copy-2')
+    expect(homestead.active.environmentId).toBe('dep-comfy-cloud')
+    expect(s.state.environments['dep-comfy-cloud']).toEqual(source)
+    expect(s.state.jobs.map((job) => job.environmentId)).toEqual([
+      'dep-comfy-cloud',
+      'dep-comfy-cloud'
+    ])
+    expect(s.state.environments['dep-comfy-cloud-copy-2'].packs).toEqual({
+      'comfyui-rmbg': '2.0.0'
+    })
+    expect(s.firstSetup).toBe(false)
+    s.edit()
+    expect(s.state.targetId).toBe('dep-comfy-cloud-copy-2')
+    expect(s.state.draft.mode).toBe('update')
+    expect(s.state.draft.packs['comfyui-rmbg']).toBe('2.0.0')
+    s.prepare()
+    vi.advanceTimersByTime(5500)
+    s.dispatch({ type: 'approve' })
+    vi.advanceTimersByTime(1600)
+    expect(s.state.environments['dep-comfy-cloud']).toEqual(source)
+    expect(s.state.environments['dep-comfy-cloud-copy-2'].revision).toBe(2)
+    s.edit()
+    expect(s.state.targetId).toBe('dep-comfy-cloud')
+    expect(s.firstSetup).toBe(true)
+    expect(s.state.draft.mode).toBe('new')
+    s.state.draft.mode = 'update'
+    s.prepare()
+    expect(s.state.draft.mode).toBe('new')
+    vi.advanceTimersByTime(5500)
+    s.dispatch({ type: 'approve' })
+    vi.advanceTimersByTime(1600)
+    expect(s.state.environments['dep-comfy-cloud']).toEqual(source)
+  })
+
+  it('initializes the shareable first scenario from the active workflow fixture models', () => {
+    window.history.replaceState(
+      {},
+      '',
+      '/prototype/homestead?v=2&flow=extensions&scenario=first'
+    )
+    const s = useExtensionManagerStore()
+    const homestead = useHomesteadStore()
+    homestead.active.models = []
+    s.initialize()
+    expect(s.firstSetup).toBe(true)
+    expect(s.state.targetId).toBe('dep-comfy-cloud')
+    expect(s.state.draft.models.length).toBeGreaterThan(0)
+    expect(s.state.draft.packs).toEqual({})
+    expect(s.state.environments.studio).toBeUndefined()
+    expect(homestead.environment.id).toBe('dep-comfy-cloud')
   })
 
   it('notifies all demo admins and notifies requester only after admin explicitly applies', () => {

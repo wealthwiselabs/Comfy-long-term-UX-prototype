@@ -346,16 +346,50 @@ describe('extension manager panel', () => {
     )
   })
 
-  it('sends first-time users to the existing build UI without showing a creation wizard', async () => {
+  it('creates the first environment in Cloud with empty packs and editable model-based review', async () => {
+    const user = userEvent.setup()
     const s = useExtensionManagerStore()
     s.reset('first')
     render(ExtensionPanel, { global: { plugins: [i18n] } })
     expect(
-      await screen.findByRole('link', { name: 'Create a custom environment' })
-    ).toHaveAttribute('href', 'https://platform.comfy.org/profile/builds/new')
-    expect(screen.queryByRole('combobox')).not.toBeInTheDocument()
+      await screen.findByRole('dialog', { name: 'Node packs' })
+    ).toHaveTextContent('Choose packs for your first custom environment.')
     expect(
-      screen.queryByRole('button', { name: 'Prepare environment' })
+      screen.queryByRole('link', { name: 'Create a custom environment' })
     ).not.toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: 'Installed · 0' })
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('checkbox', { name: 'Include ComfyUI Impact Pack' })
+    ).not.toBeChecked()
+    await user.click(
+      screen.getByRole('checkbox', { name: 'Include ComfyUI Impact Pack' })
+    )
+    await user.click(screen.getByRole('button', { name: 'Review changes · 1' }))
+    expect(
+      screen.getByRole('radio', { name: 'Create a new environment' })
+    ).toBeChecked()
+    expect(
+      screen.queryByRole('radio', { name: 'Update this environment' })
+    ).not.toBeInTheDocument()
+    expect(
+      screen.getByRole('textbox', { name: 'Environment name' })
+    ).toHaveValue('My custom environment')
+    expect(
+      screen.getByRole('spinbutton', { name: 'Estimated storage (GB)' })
+    ).toHaveValue(16)
+    expect(screen.getByText(/Illustrative suggestion:/)).toHaveTextContent(
+      'This demo does not measure VRAM or validate capacity'
+    )
+    await user.click(
+      screen.getByRole('button', { name: 'Prepare environment' })
+    )
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(await screen.findByRole('complementary')).toHaveTextContent(
+      'Preparing in background'
+    )
+    expect(s.state.draft.mode).toBe('new')
+    expect(s.locked).toBe(false)
   })
 })

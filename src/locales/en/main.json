@@ -8065,10 +8065,9 @@
     "packs": "Node packs",
     "review": "Review environment",
     "progress": "Environment status",
-    "firstTitle": "Bring your nodes to Cloud",
-    "firstBody": "A custom environment gives your workflows access to community and private node packs. Create your first environment in the current build UI, then return to Cloud.",
+    "firstTitle": "Create your first custom environment in Cloud",
+    "firstBody": "Choose packs for your first custom environment. Review settings and costs here, then keep working in standard Cloud while it prepares.",
     "create": "Create a custom environment",
-    "handoff": "Opens Developer Platform’s existing build UI in a new tab. No new subscription gate.",
     "search": "Search node packs",
     "searchPlaceholder": "Search name, description, or publisher",
     "installed": "Installed · {version}",
@@ -8096,8 +8095,8 @@
     "destination": "Destination",
     "updateEnvironment": "Update this environment",
     "newEnvironment": "Create a new environment",
-    "sharedEffect": "Updates Studio production for you and your teammate. Unrelated environments are unchanged.",
-    "newEffect": "The source and its users stay unchanged. Demo default: only this editor selects the new environment; final session behavior is an open product decision.",
+    "sharedEffect": "Updates {name} for everyone using it. Unrelated environments are unchanged.",
+    "newEffect": "The source and its users stay unchanged. Only the initiating workflow selects the new environment in this demo.",
     "settings": "Inherited settings · editable",
     "name": "Environment name",
     "models": "Models (comma-separated IDs)",
@@ -8198,6 +8197,11 @@
     "previous": "Previous",
     "next": "Next",
     "pageCount": "Page {page} of {total}",
-    "resultsRange": "Showing {start}–{end} of {total} packs"
+    "resultsRange": "Showing {start}–{end} of {total} packs",
+    "firstSettings": "Workflow-based starting settings · editable",
+    "gpuSuggestion": "Illustrative suggestion: {gpu}, based on these workflow model names: {models}. This demo does not measure VRAM or validate capacity; choose your GPU.",
+    "noWorkflowModels": "No additional model files listed",
+    "firstStorageEstimate": "Storage starts from a 16 GB illustrative estimate when models are listed. Edit it for your files; nothing is uploaded in this demo.",
+    "tipApplyingNew": "Selecting the new custom environment for the initiating workflow. Standard Cloud and accepted source jobs continue unchanged; your unsaved graph stays mounted."
   }
 }
