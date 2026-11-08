@@ -8080,7 +8080,7 @@
     "remove": "Remove pack",
     "noResults": "No matching node packs.",
     "source": "Add from GitHub or ZIP",
-    "sourceHint": "Metadata only for this demo. Nothing is fetched or uploaded. Private repository access and compatibility are not validated.",
+    "sourceHint": "Filename and URL metadata only. Nothing is read, uploaded, or fetched. Private repository access and compatibility are not validated.",
     "github": "GitHub repository URL",
     "githubPlaceholder": "https://github.com/owner/node-pack",
     "addGithub": "Add GitHub pack",
@@ -8092,7 +8092,7 @@
     "removeSource": "Remove {name}",
     "reviewChanges": "Review changes · {count}",
     "request": "Request selected changes",
-    "selectionHint": "Choose versions to add or update. Removal is reviewed and never deletes nodes from your graph.",
+    "selectionHint": "Check the packs to include. Uncheck installed packs to stage removal. Version choices apply only to checked packs.",
     "destination": "Destination",
     "updateEnvironment": "Update this environment",
     "newEnvironment": "Create a new environment",
@@ -8183,6 +8183,21 @@
       "essentials": "Image adjustments, mask operations, and everyday utilities.",
       "comfyui-rmbg": "Extract subjects and remove backgrounds from images.",
       "acme-matte-tools": "Private studio tools for matte edges, feathering, and despill."
-    }
+    },
+    "addOwn": "Add your own",
+    "includePack": "Include {name}",
+    "desiredVersion": "Desired version",
+    "zipDropZone": "ZIP file drop zone",
+    "dropZip": "Drop ZIP files here",
+    "browseZip": "Browse ZIP files",
+    "invalidGithub": "Enter a GitHub repository URL such as https://github.com/owner/node-pack.",
+    "invalidZip": "Choose ZIP files only. Invalid filenames: {names}. Your previous selections are unchanged.",
+    "pagination": "Node pack pages",
+    "previousPage": "Previous page",
+    "nextPage": "Next page",
+    "previous": "Previous",
+    "next": "Next",
+    "pageCount": "Page {page} of {total}",
+    "resultsRange": "Showing {start}–{end} of {total} packs"
   }
 }

@@ -5,15 +5,16 @@ import Button from '@/components/ui/button/Button.vue'
 import { NODE_PACK_DETAILS } from '../../fixtures/nodePacks'
 import { policyCatalog } from '../../fixtures/policyCatalog'
 import { useExtensionManagerStore } from './store'
+import PackSources from './PackSources.vue'
 const s = useExtensionManagerStore()
 const { t } = useI18n()
 const text = (key: string, values = {}) =>
   t(`extensionPrototype.${key}`, values)
 const query = ref('')
 const filter = ref<'all' | 'installed' | 'updates'>('all')
-const github = ref('')
-const zip = ref('')
-const sourceError = ref(false)
+const sourceOpen = ref(false)
+const page = ref(1)
+const pageSize = 5
 const packs = policyCatalog.filter(
   (pack) => pack.kind === 'nodes' && pack.allowed
 )
@@ -67,11 +68,34 @@ const catalog = computed(() =>
     )
   })
 )
-const customSources = computed(() =>
-  Object.keys(s.state.draft.packs).filter(
-    (id) => !policyCatalog.some((pack) => pack.id === id)
+const pageCount = computed(() =>
+  Math.max(1, Math.ceil(catalog.value.length / pageSize))
+)
+const currentPage = computed(() => Math.min(page.value, pageCount.value))
+const visiblePacks = computed(() =>
+  catalog.value.slice(
+    (currentPage.value - 1) * pageSize,
+    currentPage.value * pageSize
   )
 )
+function choice(id: string) {
+  return (
+    s.state.draft.packs[id] ??
+    s.excludedVersions[id] ??
+    s.target.packs[id] ??
+    latestVersion(id)
+  )
+}
+function togglePack(id: string, event: Event) {
+  if (!(event.target instanceof HTMLInputElement) || !s.editable) return
+  if (event.target.checked) {
+    s.state.draft.packs[id] = choice(id)
+    delete s.excludedVersions[id]
+  } else {
+    s.excludedVersions[id] = choice(id)
+    delete s.state.draft.packs[id]
+  }
+}
 function packStatus(id: string) {
   if (s.state.draft.packs[id] !== s.target.packs[id])
     return !s.state.draft.packs[id]
@@ -85,37 +109,40 @@ function packStatus(id: string) {
       ? 'installedStatus'
       : 'available'
 }
-function selectVersion(id: string, event: Event) {
-  if (!(event.target instanceof HTMLSelectElement)) return
-  if (event.target.value) s.state.draft.packs[id] = event.target.value
-  else delete s.state.draft.packs[id]
+function selectFilter(id: 'all' | 'installed' | 'updates') {
+  filter.value = id
+  page.value = 1
 }
-function addSource(kind: 'github' | 'zip') {
-  const value = (kind === 'github' ? github.value : zip.value).trim()
-  const valid =
-    kind === 'github'
-      ? /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/?$/.test(value)
-      : /^[^/\\]+\.zip$/i.test(value)
-  sourceError.value = !valid
-  if (!valid) return
-  s.state.draft.packs[value] = 'demo'
-  if (kind === 'github') github.value = ''
-  else zip.value = ''
+function selectVersion(id: string, event: Event) {
+  if (!(event.target instanceof HTMLSelectElement) || !s.editable) return
+  if (s.state.draft.packs[id]) s.state.draft.packs[id] = event.target.value
+  else s.excludedVersions[id] = event.target.value
 }
 </script>
 <template>
   <div class="flex min-h-0 flex-1 flex-col">
     <div class="shrink-0 space-y-4 px-6 pt-3 pb-4">
-      <label class="relative block"
-        ><i
-          class="pointer-events-none absolute top-2.5 left-3 icon-[lucide--search] size-4 text-muted-foreground" /><span
-          class="sr-only"
-          >{{ text('search') }}</span
-        ><input
-          v-model="query"
-          :placeholder="text('searchPlaceholder')"
-          class="w-full rounded-lg border border-border-default bg-base-background py-2 pr-3 pl-9 text-sm"
-      /></label>
+      <div class="flex items-center gap-3">
+        <label class="relative block flex-1"
+          ><i
+            class="pointer-events-none absolute top-2.5 left-3 icon-[lucide--search] size-4 text-muted-foreground" /><span
+            class="sr-only"
+            >{{ text('search') }}</span
+          ><input
+            v-model="query"
+            :placeholder="text('searchPlaceholder')"
+            class="w-full rounded-lg border border-border-default bg-base-background py-2 pr-3 pl-9 text-sm"
+            @input="page = 1" /></label
+        ><Button
+          size="sm"
+          variant="secondary"
+          :aria-expanded="sourceOpen"
+          aria-controls="extension-pack-sources"
+          @click="sourceOpen = !sourceOpen"
+          ><i class="icon-[lucide--plus] size-4" />{{ text('addOwn') }}</Button
+        >
+      </div>
+      <PackSources :open="sourceOpen" />
       <div
         role="group"
         :aria-label="text('packFilters')"
@@ -129,7 +156,7 @@ function addSource(kind: 'github' | 'zip') {
           aria-controls="extension-pack-results"
           size="sm"
           :variant="filter === item.id ? 'secondary' : 'muted-textonly'"
-          @click="filter = item.id"
+          @click="selectFilter(item.id)"
           >{{ text(item.label, { count: item.count }) }}</Button
         >
       </div>
@@ -147,6 +174,9 @@ function addSource(kind: 'github' | 'zip') {
           class="sticky top-0 z-10 bg-base-background text-muted-foreground"
         >
           <tr class="border-b border-border-subtle">
+            <th scope="col" class="w-10 px-3 py-2 font-normal">
+              <span class="sr-only">{{ text('selectionColumn') }}</span>
+            </th>
             <th scope="col" class="px-3 py-2 font-normal">
               {{ text('packColumn') }}
             </th>
@@ -159,13 +189,23 @@ function addSource(kind: 'github' | 'zip') {
             <th scope="col" class="w-32 px-3 py-2 font-normal">
               {{ text('statusColumn') }}
             </th>
-            <th scope="col" class="w-40 px-3 py-2 font-normal">
-              {{ text('selectionColumn') }}
+            <th scope="col" class="w-28 px-3 py-2 font-normal">
+              {{ text('desiredVersion') }}
             </th>
           </tr>
         </thead>
         <tbody class="divide-y divide-border-subtle">
-          <tr v-for="pack in catalog" :key="pack.id">
+          <tr v-for="pack in visiblePacks" :key="pack.id">
+            <td class="px-3 py-3">
+              <input
+                type="checkbox"
+                class="size-4 appearance-auto"
+                :aria-label="text('includePack', { name: pack.name })"
+                :checked="Boolean(s.state.draft.packs[pack.id])"
+                :disabled="!s.editable"
+                @change="togglePack(pack.id, $event)"
+              />
+            </td>
             <td class="px-3 py-3">
               <p class="m-0 truncate text-sm font-medium">{{ pack.name }}</p>
               <p
@@ -198,31 +238,18 @@ function addSource(kind: 'github' | 'zip') {
             </td>
             <td class="px-3 py-3">
               <select
-                :value="s.state.draft.packs[pack.id] ?? ''"
+                :value="choice(pack.id)"
                 :aria-label="text('selectVersion', { name: pack.name })"
                 :disabled="!s.editable"
                 class="w-full rounded-sm border border-border-default bg-base-background p-2"
                 @change="selectVersion(pack.id, $event)"
               >
-                <option v-if="!s.target.packs[pack.id]" value="">
-                  {{ text('absent') }}
-                </option>
-                <option v-else value="">{{ text('remove') }}</option>
                 <option
                   v-for="version in versions(pack.id)"
                   :key="version"
                   :value="version"
                 >
-                  {{
-                    text(
-                      s.target.packs[pack.id] === version
-                        ? 'unchanged'
-                        : s.target.packs[pack.id]
-                          ? 'update'
-                          : 'add',
-                      { version }
-                    )
-                  }}
+                  {{ version }}
                 </option>
               </select>
             </td>
@@ -235,71 +262,40 @@ function addSource(kind: 'github' | 'zip') {
       >
         {{ text('noResults') }}
       </p>
-      <div class="space-y-3 py-4 text-sm">
-        <details class="rounded-lg border border-border-subtle p-3">
-          <summary class="cursor-pointer font-medium">
-            {{ text('source') }}
-          </summary>
-          <div class="mt-3 space-y-3">
-            <p class="m-0 text-xs leading-5 text-muted-foreground">
-              {{ text('sourceHint') }}
-            </p>
-            <label class="block text-xs"
-              >{{ text('github')
-              }}<input
-                v-model="github"
-                :placeholder="text('githubPlaceholder')"
-                class="mt-1 w-full rounded-sm border border-border-default bg-base-background p-2" /></label
-            ><Button
-              size="sm"
-              variant="secondary"
-              :disabled="!s.editable"
-              @click="addSource('github')"
-              >{{ text('addGithub') }}</Button
-            ><label class="block text-xs"
-              >{{ text('zip')
-              }}<input
-                v-model="zip"
-                :placeholder="text('zipPlaceholder')"
-                class="mt-1 w-full rounded-sm border border-border-default bg-base-background p-2" /></label
-            ><Button
-              size="sm"
-              variant="secondary"
-              :disabled="!s.editable"
-              @click="addSource('zip')"
-              >{{ text('addZip') }}</Button
-            >
-            <p
-              v-if="sourceError"
-              role="alert"
-              class="m-0 text-xs text-node-stroke-error"
-            >
-              {{ text('invalidSource') }}
-            </p>
-          </div>
-        </details>
-        <div v-if="customSources.length" class="space-y-2">
-          <h3 class="text-xs font-medium">{{ text('customAdded') }}</h3>
-          <div
-            v-for="source in customSources"
-            :key="source"
-            class="flex items-center justify-between gap-2 rounded-lg bg-secondary-background p-2 text-xs"
-          >
-            <span class="break-all">{{ source }}</span
-            ><Button
-              size="icon-sm"
-              variant="muted-textonly"
-              :aria-label="text('removeSource', { name: source })"
-              :disabled="!s.editable"
-              @click="delete s.state.draft.packs[source]"
-              ><i class="icon-[lucide--x] size-3"
-            /></Button>
-          </div>
-        </div>
-        <p class="m-0 text-xs leading-5 text-muted-foreground">
-          {{ text('nodeLimits') }}
-        </p>
-      </div>
     </div>
+    <nav
+      class="flex shrink-0 flex-wrap items-center justify-between gap-3 px-6 py-3 text-xs text-muted-foreground"
+      :aria-label="text('pagination')"
+    >
+      <span>{{
+        text('resultsRange', {
+          start: catalog.length ? (currentPage - 1) * pageSize + 1 : 0,
+          end: Math.min(currentPage * pageSize, catalog.length),
+          total: catalog.length
+        })
+      }}</span>
+      <div class="flex items-center gap-3">
+        <Button
+          size="sm"
+          variant="muted-textonly"
+          :aria-label="text('previousPage')"
+          :disabled="currentPage <= 1"
+          @click="page = currentPage - 1"
+          ><i class="icon-[lucide--chevron-left] size-4" />{{
+            text('previous')
+          }}</Button
+        ><span>{{
+          text('pageCount', { page: currentPage, total: pageCount })
+        }}</span
+        ><Button
+          size="sm"
+          variant="muted-textonly"
+          :aria-label="text('nextPage')"
+          :disabled="currentPage >= pageCount"
+          @click="page = currentPage + 1"
+          >{{ text('next') }}<i class="icon-[lucide--chevron-right] size-4"
+        /></Button>
+      </div>
+    </nav>
   </div>
 </template>

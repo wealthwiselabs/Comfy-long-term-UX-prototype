@@ -1,5 +1,11 @@
 import '@testing-library/jest-dom/vitest'
-import { render, screen, waitFor, within } from '@testing-library/vue'
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within
+} from '@testing-library/vue'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { nextTick } from 'vue'
@@ -27,12 +33,11 @@ describe('extension manager panel', () => {
       screen.getByRole('combobox', { name: 'Version for ComfyUI Impact Pack' }),
       '8.29.1'
     )
-    await user.click(screen.getByText('Add from GitHub or ZIP'))
-    await user.type(
-      screen.getByRole('textbox', { name: 'ZIP file name' }),
-      'studio-nodes.zip'
+    await user.click(screen.getByRole('button', { name: 'Add your own' }))
+    await user.upload(
+      screen.getByLabelText('Browse ZIP files'),
+      new File(['demo'], 'studio-nodes.zip', { type: 'application/zip' })
     )
-    await user.click(screen.getByRole('button', { name: 'Add ZIP pack' }))
     await user.click(
       screen.getByRole('button', { name: 'Close Extensions panel' })
     )
@@ -102,6 +107,139 @@ describe('extension manager panel', () => {
     ).toBeInTheDocument()
   })
 
+  it('keeps checkbox inclusion independent from version choices across pages, search, and reopening', async () => {
+    const user = userEvent.setup()
+    const s = useExtensionManagerStore()
+    render(ExtensionPanel, { global: { plugins: [i18n] } })
+    await screen.findByRole('dialog')
+    expect(screen.getAllByRole('row')).toHaveLength(6)
+    expect(screen.getByText('Page 1 of 2')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Previous page' })).toBeDisabled()
+    const impactIncluded = screen.getByRole('checkbox', {
+      name: 'Include ComfyUI Impact Pack'
+    })
+    expect(impactIncluded).toBeChecked()
+    await user.click(impactIncluded)
+    expect(screen.getByText('Pending removal')).toBeInTheDocument()
+    await user.selectOptions(
+      screen.getByRole('combobox', { name: 'Version for ComfyUI Impact Pack' }),
+      '8.29.1'
+    )
+    expect(s.state.draft.packs['impact-pack']).toBeUndefined()
+    await user.click(impactIncluded)
+    expect(s.state.draft.packs['impact-pack']).toBe('8.29.1')
+    await user.click(screen.getByRole('button', { name: 'Next page' }))
+    expect(screen.getByText('Page 2 of 2')).toBeInTheDocument()
+    expect(screen.getByText('Showing 6–7 of 7 packs')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Next page' })).toBeDisabled()
+    await user.selectOptions(
+      screen.getByRole('combobox', { name: 'Version for ComfyUI-RMBG' }),
+      '1.9.3'
+    )
+    expect(s.state.draft.packs['comfyui-rmbg']).toBeUndefined()
+    await user.click(
+      screen.getByRole('checkbox', { name: 'Include ComfyUI-RMBG' })
+    )
+    expect(s.state.draft.packs['comfyui-rmbg']).toBe('1.9.3')
+    await user.type(
+      screen.getByRole('textbox', { name: 'Search node packs' }),
+      'Impact'
+    )
+    expect(screen.getByText('Page 1 of 1')).toBeInTheDocument()
+    expect(
+      screen.getByRole('checkbox', { name: 'Include ComfyUI Impact Pack' })
+    ).toBeChecked()
+    expect(
+      screen.getByRole('combobox', { name: 'Version for ComfyUI Impact Pack' })
+    ).toHaveValue('8.29.1')
+    await user.click(
+      screen.getByRole('button', { name: 'Close Extensions panel' })
+    )
+    s.edit()
+    await screen.findByRole('dialog')
+    await user.click(screen.getByRole('button', { name: 'Next page' }))
+    expect(
+      screen.getByRole('checkbox', { name: 'Include ComfyUI-RMBG' })
+    ).toBeChecked()
+    expect(
+      screen.getByRole('combobox', { name: 'Version for ComfyUI-RMBG' })
+    ).toHaveValue('1.9.3')
+    await user.click(
+      screen.getByRole('checkbox', { name: 'Include ComfyUI-RMBG' })
+    )
+    await user.click(
+      screen.getByRole('button', { name: 'Close Extensions panel' })
+    )
+    s.edit()
+    await screen.findByRole('dialog')
+    await user.click(screen.getByRole('button', { name: 'Next page' }))
+    expect(
+      screen.getByRole('checkbox', { name: 'Include ComfyUI-RMBG' })
+    ).not.toBeChecked()
+    expect(
+      screen.getByRole('combobox', { name: 'Version for ComfyUI-RMBG' })
+    ).toHaveValue('1.9.3')
+    await user.click(
+      screen.getByRole('button', { name: 'Updates available · 2' })
+    )
+    expect(screen.getByText('Page 1 of 1')).toBeInTheDocument()
+    expect(
+      screen.getByRole('combobox', { name: 'Version for ComfyUI Impact Pack' })
+    ).toHaveValue('8.29.1')
+  })
+
+  it('accepts ZIP browse/drop metadata and retains valid choices after invalid files or GitHub URLs', async () => {
+    const user = userEvent.setup({ applyAccept: false })
+    const s = useExtensionManagerStore()
+    render(ExtensionPanel, { global: { plugins: [i18n] } })
+    await screen.findByRole('dialog')
+    await user.click(screen.getByRole('button', { name: 'Add your own' }))
+    await user.upload(
+      screen.getByLabelText('Browse ZIP files'),
+      new File(['private content'], 'private.zip', { type: 'application/zip' })
+    )
+    expect(screen.getByText('private.zip')).toBeInTheDocument()
+    await user.upload(
+      screen.getByLabelText('Browse ZIP files'),
+      new File(['bad'], 'invalid.txt')
+    )
+    expect(screen.getByRole('alert')).toHaveTextContent('invalid.txt')
+    expect(s.state.draft.packs['private.zip']).toBe('demo')
+    const transfer = new DataTransfer()
+    transfer.items.add(
+      new File(['other'], 'second.ZIP', { type: 'application/zip' })
+    )
+    transfer.items.add(new File(['bad'], 'wrong.tar'))
+    await fireEvent.drop(
+      screen.getByRole('group', { name: 'ZIP file drop zone' }),
+      { dataTransfer: transfer }
+    )
+    expect(screen.getByText('second.ZIP')).toBeInTheDocument()
+    expect(screen.getByRole('alert')).toHaveTextContent('wrong.tar')
+    expect(s.state.draft.packs['private.zip']).toBe('demo')
+    expect(s.state.draft.packs['wrong.tar']).toBeUndefined()
+    await user.type(
+      screen.getByRole('textbox', { name: 'GitHub repository URL' }),
+      'https://github.com/studio/nodes'
+    )
+    await user.click(screen.getByRole('button', { name: 'Add GitHub pack' }))
+    expect(
+      screen.getByText('https://github.com/studio/nodes')
+    ).toBeInTheDocument()
+    await user.type(
+      screen.getByRole('textbox', { name: 'GitHub repository URL' }),
+      'not-a-repository'
+    )
+    await user.click(screen.getByRole('button', { name: 'Add GitHub pack' }))
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Enter a GitHub repository URL'
+    )
+    expect(s.state.draft.packs['https://github.com/studio/nodes']).toBe('demo')
+    await user.click(screen.getByRole('button', { name: 'Add your own' }))
+    expect(screen.getByText('private.zip')).toBeInTheDocument()
+    expect(screen.getByText('second.ZIP')).toBeInTheDocument()
+  })
+
   it('dismisses with Escape and returns focus to the Extensions opener', async () => {
     const user = userEvent.setup()
     render(
@@ -133,9 +271,13 @@ describe('extension manager panel', () => {
     const s = useExtensionManagerStore()
     render(ExtensionPanel, { global: { plugins: [i18n] } })
     await screen.findByRole('dialog', { name: 'Node packs' })
+    await user.click(screen.getByRole('button', { name: 'Next page' }))
     await user.selectOptions(
       screen.getByRole('combobox', { name: 'Version for ComfyUI-RMBG' }),
       '2.0.0'
+    )
+    await user.click(
+      screen.getByRole('checkbox', { name: 'Include ComfyUI-RMBG' })
     )
     await user.click(screen.getByRole('button', { name: 'Review changes · 1' }))
     expect(
@@ -160,9 +302,13 @@ describe('extension manager panel', () => {
     s.reset('member')
     render(ExtensionPanel, { global: { plugins: [i18n] } })
     await screen.findByRole('dialog', { name: 'Node packs' })
+    await user.click(screen.getByRole('button', { name: 'Next page' }))
     await user.selectOptions(
       screen.getByRole('combobox', { name: 'Version for ComfyUI-RMBG' }),
       '2.0.0'
+    )
+    await user.click(
+      screen.getByRole('checkbox', { name: 'Include ComfyUI-RMBG' })
     )
     await user.click(
       screen.getByRole('button', { name: 'Request selected changes' })

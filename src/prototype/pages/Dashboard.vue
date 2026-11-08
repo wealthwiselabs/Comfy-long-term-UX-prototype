@@ -221,7 +221,19 @@ function carriesFiles(event: DragEvent) {
   return event.dataTransfer?.types.includes('Files') ?? false
 }
 
+function isExtensionSourceDrop(event: DragEvent) {
+  return (
+    extensions.enabled &&
+    event.target instanceof Element &&
+    !!event.target.closest('[data-extension-source-drop]')
+  )
+}
+
 function onFileDragOver(event: DragEvent) {
+  if (isExtensionSourceDrop(event)) {
+    isDraggingFile.value = false
+    return
+  }
   if (!handlesFileDrops.value || !carriesFiles(event)) return
   event.preventDefault()
   isDraggingFile.value = true
@@ -232,6 +244,10 @@ function onFileDragLeave(event: DragEvent) {
 }
 
 function onFileDrop(event: DragEvent) {
+  if (isExtensionSourceDrop(event)) {
+    isDraggingFile.value = false
+    return
+  }
   if (!handlesFileDrops.value || !carriesFiles(event)) return
   event.preventDefault()
   event.stopPropagation()

@@ -15,6 +15,7 @@ export const useExtensionManagerStore = defineStore(
     const homestead = useHomesteadStore()
     const initiatingWorkflowId = ref<string | null>(null)
     const state = ref(initialState())
+    const excludedVersions = ref<Record<string, string>>({})
     const panel = ref<'packs' | 'review' | 'status' | null>('packs')
     const scenario = ref<'existing' | 'first' | 'member'>('existing')
     const role = ref<'admin' | 'member'>('admin')
@@ -168,6 +169,7 @@ export const useExtensionManagerStore = defineStore(
     function edit() {
       if (!editable.value) return
       if (state.value.phase === 'updated') {
+        excludedVersions.value = {}
         state.value.environments[homestead.environment.id] =
           extensionEnvironment(homestead.environment)
         state.value.targetId = homestead.environment.id
@@ -184,6 +186,7 @@ export const useExtensionManagerStore = defineStore(
       timers.forEach(clearTimeout)
       timers.clear()
       state.value = initialState()
+      excludedVersions.value = {}
       scenario.value = next
       role.value = next === 'member' ? 'member' : 'admin'
       inbox.value = []
@@ -226,6 +229,7 @@ export const useExtensionManagerStore = defineStore(
     return {
       enabled,
       state,
+      excludedVersions,
       panel,
       scenario,
       role,
