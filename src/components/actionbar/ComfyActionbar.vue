@@ -20,6 +20,9 @@
             )
           "
         />
+        <ExtensionEnvironmentPicker
+          v-if="homestead.enabled && extensions.enabled"
+        />
         <fieldset
           :disabled="
             homestead.enabled && extensions.enabled && extensions.locked
@@ -121,6 +124,7 @@ import { cn } from '@comfyorg/tailwind-utils'
 
 import ComfyRunButton from './ComfyRunButton'
 import { useExtensionManagerStore } from '@/prototype/homestead/extensions/store'
+import ExtensionEnvironmentPicker from '@/prototype/homestead/extensions/ExtensionEnvironmentPicker.vue'
 import { useHomesteadStore } from '@/prototype/homestead/store'
 import HomesteadCloudButton from '@/prototype/homestead/HomesteadCloudButton.vue'
 

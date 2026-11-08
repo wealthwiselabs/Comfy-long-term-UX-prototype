@@ -71,8 +71,9 @@
                 class="shrink-0"
               />
               <LoginButton v-else-if="!isIntegratedTabBar" />
+              <ExtensionManagerButton v-if="isPrototypeExtensions" />
               <Button
-                v-if="
+                v-else-if="
                   managerState.shouldShowExtensionsButton.value ||
                   isPrototypeCustomNodes
                 "
@@ -213,6 +214,8 @@ import { ManagerTab } from '@/workbench/extensions/manager/types/comfyManagerTyp
 import { cn } from '@comfyorg/tailwind-utils'
 import { usePrototypeCustomCloudStore } from '@/prototype/stores/customCloudStore'
 import { usePrototypeCustomNodesStore } from '@/prototype/stores/customNodesStore'
+import { useExtensionManagerStore } from '@/prototype/homestead/extensions/store'
+import ExtensionManagerButton from '@/prototype/homestead/extensions/ExtensionManagerButton.vue'
 
 const settingStore = useSettingStore()
 const workspaceStore = useWorkspaceStore()
@@ -228,6 +231,10 @@ const prototypeCustomCloud = usePrototypeCustomCloudStore()
 const prototypeCustomNodes = usePrototypeCustomNodesStore()
 const isPrototypeCustomNodes = computed(
   () => prototypeCustomCloud.editorMounted && prototypeCustomCloud.isEnabled
+)
+const prototypeExtensions = useExtensionManagerStore()
+const isPrototypeExtensions = computed(
+  () => isPrototypeCustomNodes.value && prototypeExtensions.enabled
 )
 const { flags } = useFeatureFlags()
 const { isLoggedIn } = useCurrentUser()

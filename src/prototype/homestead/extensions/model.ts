@@ -1,3 +1,5 @@
+import { normalizeModels } from './catalog'
+
 export interface ExtensionEnvironment {
   id: string
   name: string
@@ -5,7 +7,6 @@ export interface ExtensionEnvironment {
   packs: Record<string, string>
   models: string[]
   gpu: string
-  storage: number
 }
 interface ExtensionDraft extends Omit<ExtensionEnvironment, 'id' | 'revision'> {
   mode: 'update' | 'new'
@@ -43,8 +44,7 @@ export function initialState(): ExtensionState {
     revision: 12,
     packs: { 'impact-pack': '8.28.3', 'comfyui-kjnodes': '1.4.2' },
     models: ['flux1-dev-fp8', 'acme_hero_lora_v5'],
-    gpu: 'A100 · 80 GB',
-    storage: 48
+    gpu: 'rtx-pro-6000-server'
   }
   return {
     phase: 'idle',
@@ -58,8 +58,8 @@ export function initialState(): ExtensionState {
 }
 export function suggestedGpu(models: string[]) {
   return models.some((model) => /flux|hidream/i.test(model))
-    ? 'A100 · 80 GB'
-    : 'L40S · 48 GB'
+    ? 'rtx-pro-6000-server'
+    : 'rtx-pro-6000-mig-2g-48gb'
 }
 export function firstEnvironmentState(models: string[]): ExtensionState {
   const cloud: ExtensionEnvironment = {
@@ -68,8 +68,7 @@ export function firstEnvironmentState(models: string[]): ExtensionState {
     revision: 1,
     packs: {},
     models: [],
-    gpu: 'Comfy Cloud',
-    storage: 0
+    gpu: 'Comfy Cloud'
   }
   return {
     phase: 'idle',
@@ -80,9 +79,8 @@ export function firstEnvironmentState(models: string[]): ExtensionState {
       name: 'My custom environment',
       mode: 'new',
       packs: {},
-      models: [...models],
-      gpu: suggestedGpu(models),
-      storage: models.length ? 16 : 0
+      models: normalizeModels(models),
+      gpu: suggestedGpu(models)
     },
     jobs: [],
     sessions: { you: cloud.id, teammate: cloud.id, unrelated: 'other' }

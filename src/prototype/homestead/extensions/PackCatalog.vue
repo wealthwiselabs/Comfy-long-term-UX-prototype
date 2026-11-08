@@ -118,6 +118,12 @@ function selectVersion(id: string, event: Event) {
   if (s.state.draft.packs[id]) s.state.draft.packs[id] = event.target.value
   else s.excludedVersions[id] = event.target.value
 }
+function updatePack(id: string) {
+  const latest = latestVersion(id)
+  if (!s.editable || !latest) return
+  s.state.draft.packs[id] = latest
+  delete s.excludedVersions[id]
+}
 </script>
 <template>
   <div class="flex min-h-0 flex-1 flex-col">
@@ -234,6 +240,19 @@ function selectVersion(id: string, event: Event) {
               <span
                 class="rounded-sm bg-secondary-background px-2 py-1 whitespace-nowrap"
                 >{{ text(packStatus(pack.id)) }}</span
+              >
+              <Button
+                v-if="
+                  hasUpdate(pack.id) &&
+                  s.state.draft.packs[pack.id] === s.target.packs[pack.id]
+                "
+                variant="secondary"
+                size="sm"
+                class="mt-2"
+                :aria-label="text('updatePack', { name: pack.name })"
+                :disabled="!s.editable"
+                @click="updatePack(pack.id)"
+                >{{ text('updatePackAction') }}</Button
               >
             </td>
             <td class="px-3 py-3">

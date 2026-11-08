@@ -257,7 +257,7 @@ let registeredKey: string | null = null
 
 // Only while a workflow tab is showing: re-measuring nodes in a hidden
 // editor collapses them. Node types re-register only when the deployment
-// changes what's available, and the graph then reloads against them.
+// changes what's available.
 async function syncEditor() {
   await ready
   await enqueue(async () => {
@@ -268,9 +268,7 @@ async function syncEditor() {
       await registerDeploymentNodes()
       registeredKey = nodeDefsKey.value
     }
-    if (extensions.enabled && changed && extensions.state.phase === 'updated')
-      return
-    await showActiveTab(changed)
+    await showActiveTab(changed && !extensions.enabled)
   })
 }
 

@@ -10,8 +10,9 @@ import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { nextTick } from 'vue'
 import { i18n } from '@/i18n'
+import { useToastStore } from '@/platform/updates/common/toastStore'
 import ExtensionPanel from './ExtensionPanel.vue'
-import ExtensionToolbar from './ExtensionToolbar.vue'
+import ExtensionManagerButton from './ExtensionManagerButton.vue'
 import { useExtensionManagerStore } from './store'
 
 describe('extension manager panel', () => {
@@ -51,7 +52,11 @@ describe('extension manager panel', () => {
       })
     ).toHaveValue('8.29.1')
     expect(screen.getByText('studio-nodes.zip')).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'Review changes · 2' }))
+    await user.click(screen.getByRole('button', { name: 'Next' }))
+    expect(
+      screen.getByRole('dialog', { name: 'Models & LoRAs' })
+    ).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Next' }))
     expect(
       screen.getByRole('radio', { name: 'Update this environment' })
     ).toBeChecked()
@@ -62,10 +67,10 @@ describe('extension manager panel', () => {
       screen.getByText('studio-nodes.zip: Not installed → demo')
     ).toBeInTheDocument()
     expect(
-      screen.getByText('GPU: $0.0012 per second, billed for usage.')
-    ).toBeInTheDocument()
+      screen.queryByText('RTX PRO 6000 · $3.49/hour (sample)')
+    ).not.toBeInTheDocument()
     expect(
-      screen.getByText('Storage: 48 GB × $0.07 / GB-month ≈ $3.36 / month.')
+      screen.getByText('Estimated environment package size')
     ).toBeInTheDocument()
   })
 
@@ -93,7 +98,10 @@ describe('extension manager panel', () => {
     ).toBeInTheDocument()
     expect(within(impact).getByText('Installed 8.28.3')).toBeInTheDocument()
     expect(within(impact).getByText('Available 8.29.1')).toBeInTheDocument()
-    await user.selectOptions(within(impact).getByRole('combobox'), '8.29.1')
+    await user.click(
+      within(impact).getByRole('button', { name: 'Update ComfyUI Impact Pack' })
+    )
+    expect(within(impact).getByRole('combobox')).toHaveValue('8.29.1')
     expect(within(impact).getByText('Pending update')).toBeInTheDocument()
     expect(within(impact).getByText('Installed 8.28.3')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'All packs · 7' }))
@@ -240,12 +248,114 @@ describe('extension manager panel', () => {
     expect(screen.getByText('second.ZIP')).toBeInTheDocument()
   })
 
+  it('keeps workflow and inherited defaults deduplicated, adds a LoRA, and derives read-only storage through back/reopen', async () => {
+    const user = userEvent.setup()
+    const s = useExtensionManagerStore()
+    s.state.draft.models = ['sdxl', 'private-workflow.gguf']
+    s.workflowModelIds = ['sdxl', 'private-workflow.gguf']
+    s.state.environments.studio.models = ['sdxl', 'private-workflow.gguf']
+    render(ExtensionPanel, { global: { plugins: [i18n] } })
+    await screen.findByRole('dialog')
+    expect(screen.getByRole('button', { name: 'Next' })).toHaveClass(
+      'bg-primary-background',
+      'h-10'
+    )
+    await user.click(screen.getByRole('button', { name: 'Next' }))
+    expect(
+      screen.getByRole('dialog', { name: 'Models & LoRAs' })
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('checkbox', { name: 'Include Stable Diffusion XL' })
+    ).toBeChecked()
+    const privateModel = screen.getByRole('checkbox', {
+      name: 'Include private-workflow.gguf'
+    })
+    expect(privateModel).toBeChecked()
+    await user.click(privateModel)
+    expect(
+      screen.getByRole('checkbox', { name: 'Include private-workflow.gguf' })
+    ).not.toBeChecked()
+    await user.click(privateModel)
+    await user.click(screen.getByRole('button', { name: 'LoRAs' }))
+    await user.click(
+      screen.getByRole('checkbox', { name: 'Include Detail Tweaker XL' })
+    )
+    await user.click(screen.getByRole('button', { name: 'Next' }))
+    expect(
+      screen.getByRole('dialog', { name: 'Environment Settings' })
+    ).toBeInTheDocument()
+    expect(screen.queryByRole('spinbutton')).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('textbox', { name: 'Models (comma-separated IDs)' })
+    ).not.toBeInTheDocument()
+    expect(screen.getByText('At least 11.25 GB')).toBeInTheDocument()
+    expect(
+      screen.getByText('Estimated storage: $1.02+ / month')
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: 'Build environment' })
+    ).toHaveClass('bg-primary-background', 'h-10')
+    await user.click(
+      screen.getByRole('radio', { name: 'RTX PRO 6000 MIG · 48 GB' })
+    )
+    expect(
+      screen.queryByText('RTX PRO 6000 MIG · $1.75/hour (sample)')
+    ).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Edit models' }))
+    expect(
+      screen.getByRole('checkbox', { name: 'Include Detail Tweaker XL' })
+    ).toBeChecked()
+    await user.click(
+      screen.getByRole('button', { name: 'Close Extensions panel' })
+    )
+    s.edit()
+    await screen.findByRole('dialog')
+    await user.click(screen.getByRole('button', { name: 'Next' }))
+    expect(
+      screen.getByRole('checkbox', { name: 'Include Detail Tweaker XL' })
+    ).toBeChecked()
+    expect(
+      screen.getByRole('checkbox', { name: 'Include private-workflow.gguf' })
+    ).toBeChecked()
+    await user.click(screen.getByRole('button', { name: 'Next' }))
+    expect(
+      screen.getByRole('radio', { name: 'RTX PRO 6000 MIG · 48 GB' })
+    ).toBeChecked()
+  })
+
+  it('does not quote an unsupported GPU or a complete storage total when all model sizes are unknown', async () => {
+    const user = userEvent.setup()
+    const s = useExtensionManagerStore()
+    s.state.draft.models = ['private.gguf']
+    s.state.draft.gpu = 'unsupported-gpu'
+    s.panel = 'review'
+    render(ExtensionPanel, { global: { plugins: [i18n] } })
+    await screen.findByRole('dialog', { name: 'Environment Settings' })
+    expect(
+      screen.getByRole('button', { name: 'Build environment' })
+    ).toBeDisabled()
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'not in the sample priced catalog'
+    )
+    expect(screen.getByText('At least 5.00 GB')).toBeInTheDocument()
+    expect(
+      screen.getByText('Estimated storage: $0.46+ / month')
+    ).toBeInTheDocument()
+    await user.click(screen.getByRole('radio', { name: 'H100 SXM · 80 GB' }))
+    expect(
+      screen.getByRole('button', { name: 'Build environment' })
+    ).toBeEnabled()
+    expect(
+      screen.queryByText('H100 SXM · $6.23/hour (sample)')
+    ).not.toBeInTheDocument()
+  })
+
   it('dismisses with Escape and returns focus to the Extensions opener', async () => {
     const user = userEvent.setup()
     render(
       {
-        components: { ExtensionToolbar, ExtensionPanel },
-        template: '<ExtensionToolbar /><ExtensionPanel />'
+        components: { ExtensionManagerButton, ExtensionPanel },
+        template: '<ExtensionManagerButton /><ExtensionPanel />'
       },
       { global: { plugins: [i18n] } }
     )
@@ -279,13 +389,12 @@ describe('extension manager panel', () => {
     await user.click(
       screen.getByRole('checkbox', { name: 'Include ComfyUI-RMBG' })
     )
-    await user.click(screen.getByRole('button', { name: 'Review changes · 1' }))
+    await user.click(screen.getByRole('button', { name: 'Next' }))
+    await user.click(screen.getByRole('button', { name: 'Next' }))
     expect(
-      screen.getByRole('dialog', { name: 'Review environment' })
+      screen.getByRole('dialog', { name: 'Environment Settings' })
     ).toBeInTheDocument()
-    await user.click(
-      screen.getByRole('button', { name: 'Prepare environment' })
-    )
+    await user.click(screen.getByRole('button', { name: 'Build environment' }))
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     expect(
       await screen.findByRole('complementary', { name: 'Extensions' })
@@ -296,33 +405,123 @@ describe('extension manager panel', () => {
     expect(s.locked).toBe(false)
   })
 
-  it('closes the request modal and opens request status before preselected admin review', async () => {
+  it('sends a two-step member request with a note and keeps settings in preselected admin review', async () => {
     const user = userEvent.setup()
     const s = useExtensionManagerStore()
     s.reset('member')
     render(ExtensionPanel, { global: { plugins: [i18n] } })
     await screen.findByRole('dialog', { name: 'Node packs' })
-    await user.click(screen.getByRole('button', { name: 'Next page' }))
-    await user.selectOptions(
-      screen.getByRole('combobox', { name: 'Version for ComfyUI-RMBG' }),
-      '2.0.0'
+    expect(
+      screen.getByText('Step 1 of 2 · Studio production')
+    ).toBeInTheDocument()
+    await user.click(
+      screen.getByRole('button', { name: 'Update ComfyUI Impact Pack' })
+    )
+    await user.click(screen.getByRole('button', { name: 'Next' }))
+    expect(
+      screen.getByText('Step 2 of 2 · Studio production')
+    ).toBeInTheDocument()
+    await user.click(
+      screen.getByRole('checkbox', { name: 'Include Detail Tweaker XL' })
+    )
+    await user.click(screen.getByText('Requested changes', { exact: true }))
+    const summary = screen.getByRole('region', { name: 'Requested changes' })
+    expect(
+      within(summary).getByText('ComfyUI Impact Pack: 8.28.3 → 8.29.1')
+    ).toBeInTheDocument()
+    expect(within(summary).getByText(/Detail Tweaker XL/)).toBeInTheDocument()
+    expect(
+      screen.queryByRole('radio', { name: 'Update this environment' })
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('heading', { name: 'Review estimated costs' })
+    ).not.toBeInTheDocument()
+    await user.type(
+      screen.getByRole('textbox', { name: 'Note to admins (optional)' }),
+      'Needed for the new campaign workflow.'
     )
     await user.click(
-      screen.getByRole('checkbox', { name: 'Include ComfyUI-RMBG' })
+      screen.getByRole('button', { name: 'Close Extensions panel' })
     )
-    await user.click(
-      screen.getByRole('button', { name: 'Request selected changes' })
-    )
+    s.edit()
+    await nextTick()
+    await user.click(screen.getByRole('button', { name: 'Next' }))
+    await user.click(screen.getByText('Requested changes', { exact: true }))
+    expect(
+      screen.getByRole('textbox', { name: 'Note to admins (optional)' })
+    ).toHaveValue('Needed for the new campaign workflow.')
+    await user.click(screen.getByRole('button', { name: 'Send request' }))
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
-    expect(await screen.findByRole('complementary')).toHaveTextContent(
-      'Request sent to workspace admins'
+    expect(screen.queryByRole('complementary')).not.toBeInTheDocument()
+    expect(useToastStore().messagesToAdd.at(-1)?.summary).toBe(
+      'Request emailed to workspace admins'
     )
+    expect(s.state.phase).toBe('idle')
     s.reviewRequest()
     await nextTick()
+    const adminReview = await screen.findByRole('dialog', {
+      name: 'Environment Settings'
+    })
+    expect(adminReview).toHaveTextContent(
+      'ComfyUI Impact Pack: 8.28.3 → 8.29.1'
+    )
+    expect(adminReview).toHaveTextContent('Detail Tweaker XL')
+    expect(adminReview).toHaveTextContent(
+      'Needed for the new campaign workflow.'
+    )
     expect(
-      await screen.findByRole('dialog', { name: 'Review environment' })
-    ).toHaveTextContent('ComfyUI-RMBG: Not installed → 2.0.0')
+      within(adminReview).getByRole('heading', {
+        name: 'Review estimated costs'
+      })
+    ).toBeInTheDocument()
+    expect(
+      within(adminReview).getByRole('button', { name: 'Build environment' })
+    ).toBeEnabled()
   })
+
+  it.for([
+    {
+      addNodes: true,
+      addModels: false,
+      name: 'Node packs',
+      other: 'Models & LoRAs'
+    },
+    {
+      addNodes: false,
+      addModels: true,
+      name: 'Models & LoRAs',
+      other: 'Node packs'
+    }
+  ])(
+    'shows only the enabled enterprise selection step: $name',
+    async ({ addNodes, addModels, name, other }) => {
+      const user = userEvent.setup()
+      const s = useExtensionManagerStore()
+      s.reset('member')
+      s.setEnterpriseCapabilities({ addNodes, addModels })
+      s.edit()
+      render(ExtensionPanel, { global: { plugins: [i18n] } })
+      await screen.findByRole('dialog', { name })
+      expect(
+        screen.getByText('Step 1 of 1 · Studio production')
+      ).toBeInTheDocument()
+      expect(
+        screen.queryByRole('table', { name: other })
+      ).not.toBeInTheDocument()
+      expect(
+        screen.queryByRole('button', { name: 'Next' })
+      ).not.toBeInTheDocument()
+      expect(
+        screen.queryByRole('button', { name: 'Back' })
+      ).not.toBeInTheDocument()
+      await user.click(screen.getByRole('button', { name: 'Send request' }))
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+      expect(screen.queryByRole('complementary')).not.toBeInTheDocument()
+      expect(useToastStore().messagesToAdd.at(-1)?.summary).toBe(
+        'Request emailed to workspace admins'
+      )
+    }
+  )
 
   it('requires the approval button before locking Run and waiting for running and queued jobs', async () => {
     const user = userEvent.setup()
@@ -336,9 +535,15 @@ describe('extension manager panel', () => {
     s.panel = 'status'
     render(ExtensionPanel, { global: { plugins: [i18n] } })
     expect(s.locked).toBe(false)
-    await user.click(
-      screen.getByRole('button', { name: 'Approve and apply environment' })
-    )
+    expect(screen.getByRole('status')).toHaveTextContent('Environment is ready')
+    expect(
+      screen.getByRole('button', { name: 'Apply environment' })
+    ).toHaveClass('bg-primary-background', 'h-10')
+    expect(
+      screen.queryByText('Accepted jobs · revision preserved')
+    ).not.toBeInTheDocument()
+    expect(screen.queryByText('Shared session preview')).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Apply environment' }))
     expect(s.state.phase).toBe('waiting')
     expect(s.locked).toBe(true)
     expect(screen.getByRole('status')).toHaveTextContent(
@@ -346,11 +551,51 @@ describe('extension manager panel', () => {
     )
   })
 
+  it('does not show an old success aside or insertion controls after activation', () => {
+    const s = useExtensionManagerStore()
+    s.state.phase = 'updated'
+    s.panel = 'status'
+    render(ExtensionPanel, { global: { plugins: [i18n] } })
+    expect(screen.queryByRole('complementary')).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: 'Manage packs' })
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: 'Insert RMBG node' })
+    ).not.toBeInTheDocument()
+  })
+
   it('creates the first environment in Cloud with empty packs and editable model-based review', async () => {
     const user = userEvent.setup()
     const s = useExtensionManagerStore()
     s.reset('first')
     render(ExtensionPanel, { global: { plugins: [i18n] } })
+    const intro = await screen.findByRole('dialog', {
+      name: 'Custom environment'
+    })
+    expect(intro).not.toHaveClass('h-[min(85vh,50rem)]', 'sm:max-w-6xl')
+    expect(
+      within(intro).getByText(
+        'Run community node packs and your own private nodes in a custom environment.'
+      )
+    ).toBeInTheDocument()
+    expect(
+      within(intro).getByText('Your nodes. Powerful Cloud GPUs.')
+    ).toBeInTheDocument()
+    expect(
+      within(intro).getByText(
+        'Only pay for GPU seconds while jobs run, plus storage for your environment.'
+      )
+    ).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Learn more' })).toHaveAttribute(
+      'href',
+      'https://comfy.org/pricing'
+    )
+    expect(screen.getByRole('button', { name: 'Get started' })).toHaveClass(
+      'bg-primary-background',
+      'h-10'
+    )
+    await user.click(screen.getByRole('button', { name: 'Get started' }))
     expect(
       await screen.findByRole('dialog', { name: 'Node packs' })
     ).toHaveTextContent('Choose packs for your first custom environment.')
@@ -366,7 +611,21 @@ describe('extension manager panel', () => {
     await user.click(
       screen.getByRole('checkbox', { name: 'Include ComfyUI Impact Pack' })
     )
-    await user.click(screen.getByRole('button', { name: 'Review changes · 1' }))
+    await user.click(
+      screen.getByRole('button', { name: 'Close Extensions panel' })
+    )
+    s.edit()
+    expect(
+      await screen.findByRole('dialog', { name: 'Node packs' })
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('checkbox', { name: 'Include ComfyUI Impact Pack' })
+    ).toBeChecked()
+    expect(
+      screen.queryByRole('button', { name: 'Get started' })
+    ).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Next' }))
+    await user.click(screen.getByRole('button', { name: 'Next' }))
     expect(
       screen.getByRole('radio', { name: 'Create a new environment' })
     ).toBeChecked()
@@ -376,15 +635,20 @@ describe('extension manager panel', () => {
     expect(
       screen.getByRole('textbox', { name: 'Environment name' })
     ).toHaveValue('My custom environment')
+    expect(screen.queryByRole('spinbutton')).not.toBeInTheDocument()
     expect(
-      screen.getByRole('spinbutton', { name: 'Estimated storage (GB)' })
-    ).toHaveValue(16)
+      screen.getByRole('radio', { name: 'RTX PRO 6000 · 96 GB' })
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('radio', { name: 'RTX PRO 6000 MIG · 48 GB' })
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('radio', { name: 'H100 SXM · 80 GB' })
+    ).toBeInTheDocument()
     expect(screen.getByText(/Illustrative suggestion:/)).toHaveTextContent(
       'This demo does not measure VRAM or validate capacity'
     )
-    await user.click(
-      screen.getByRole('button', { name: 'Prepare environment' })
-    )
+    await user.click(screen.getByRole('button', { name: 'Build environment' }))
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     expect(await screen.findByRole('complementary')).toHaveTextContent(
       'Preparing in background'
