@@ -2,25 +2,32 @@
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Button from '@/components/ui/button/Button.vue'
-import { modelCatalogFixture, modelEntry, normalizeModels } from './catalog'
+import {
+  cloudReadyModel,
+  modelCatalogFixture,
+  normalizeModels
+} from './catalog'
+import ModelImportPanel from './ModelImportPanel.vue'
 import { useExtensionManagerStore } from './store'
 const s = useExtensionManagerStore()
 const { t } = useI18n()
 const text = (key: string, values = {}) =>
   t(`extensionPrototype.${key}`, values)
 const query = ref('')
+const importOpen = ref(false)
 const filter = ref('all')
 const filters = ['all', 'checkpoint', 'lora', 'encoder', 'vae', 'unknown']
 const rows = computed(() =>
   [
-    ...modelCatalogFixture,
-    ...normalizeModels([
-      ...s.target.models,
-      ...s.workflowModelIds,
-      ...s.state.draft.models
-    ])
-      .map(modelEntry)
-      .filter((item) => item.kind === 'unknown')
+    ...s.importedModels,
+    ...normalizeModels(s.target.models)
+      .filter(
+        (id) =>
+          !cloudReadyModel(id) &&
+          !s.importedModels.some((entry) => entry.id === id)
+      )
+      .map(s.modelDetails),
+    ...modelCatalogFixture
   ].filter(
     (item) =>
       (filter.value === 'all' || filter.value === item.kind) &&
@@ -30,15 +37,8 @@ const rows = computed(() =>
   )
 )
 function toggleModel(id: string, event: Event) {
-  if (
-    !(event.target instanceof HTMLInputElement) ||
-    !s.editable ||
-    !s.canAddModels
-  )
-    return
-  s.state.draft.models = event.target.checked
-    ? [...new Set([...s.state.draft.models, id])]
-    : s.state.draft.models.filter((value) => value !== id)
+  if (event.target instanceof HTMLInputElement)
+    s.toggleModel(id, event.target.checked)
 }
 </script>
 <template>
@@ -47,6 +47,47 @@ function toggleModel(id: string, event: Event) {
       <p class="m-0 text-xs leading-5 text-muted-foreground">
         {{ text('modelIntro') }}
       </p>
+      <div class="flex items-center justify-between gap-3">
+        <p class="m-0 text-xs text-muted-foreground">
+          {{ text('modelCloudFixture') }}
+        </p>
+        <Button
+          size="sm"
+          variant="secondary"
+          :aria-expanded="importOpen"
+          aria-controls="extension-model-import"
+          :disabled="!s.editable || !s.canAddModels"
+          @click="importOpen = !importOpen"
+          >{{ text('modelImportTitle') }}</Button
+        >
+      </div>
+      <ModelImportPanel v-if="importOpen" @close="importOpen = false" />
+      <section
+        v-if="s.unresolvedWorkflowModels.length"
+        class="space-y-2 rounded-lg border border-border-default p-3"
+        :aria-label="text('modelUnresolvedTitle')"
+      >
+        <h3 class="m-0 text-xs font-medium">
+          {{ text('modelUnresolvedTitle') }}
+        </h3>
+        <p class="m-0 text-xs leading-5 text-muted-foreground">
+          {{ text('modelUnresolvedHint') }}
+        </p>
+        <p
+          v-for="id in s.unresolvedWorkflowModels"
+          :key="id"
+          class="m-0 truncate text-xs"
+        >
+          {{ /[\\/]/.test(id) ? id : s.modelDetails(id).fileName }}
+        </p>
+        <Button
+          size="sm"
+          variant="secondary"
+          :disabled="!s.editable || !s.canAddModels"
+          @click="importOpen = true"
+          >{{ text('modelResolveAction') }}</Button
+        >
+      </section>
       <label class="block"
         ><span class="sr-only">{{ text('modelSearch') }}</span
         ><input
@@ -107,13 +148,34 @@ function toggleModel(id: string, event: Event) {
               <p class="m-0 truncate text-sm font-medium">
                 {{ model.name
                 }}<span
-                  v-if="s.workflowModelIds.includes(model.id)"
+                  v-if="
+                    s.workflowModelIds.some(
+                      (value) =>
+                        cloudReadyModel(value)?.id === model.id ||
+                        value === model.id
+                    )
+                  "
                   class="ml-2 text-xs font-normal text-muted-foreground"
                   >{{ text('fromWorkflow') }}</span
                 >
               </p>
               <p class="m-0 mt-1 truncate text-muted-foreground">
-                {{ model.fileName }}
+                {{
+                  model.directory
+                    ? `models/${model.directory}/${model.fileName}`
+                    : model.fileName
+                }}
+              </p>
+              <p class="m-0 mt-1 text-muted-foreground">
+                {{
+                  text(
+                    s.importedModels.some((entry) => entry.id === model.id)
+                      ? 'modelImportedStatus'
+                      : cloudReadyModel(model.id)
+                        ? 'modelCloudStatus'
+                        : 'modelInheritedStatus'
+                  )
+                }}
               </p>
             </td>
             <td class="p-2 text-muted-foreground">

@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 import Button from '@/components/ui/button/Button.vue'
+import Badge from '@/components/ui/badge/Badge.vue'
 import { policyCatalog } from '../../fixtures/policyCatalog'
-import { computeCatalogFixture, modelEntry } from './catalog'
+import { computeCatalogFixture } from './catalog'
 import { useExtensionManagerStore } from './store'
 const s = useExtensionManagerStore()
 const { t, n } = useI18n()
@@ -16,15 +17,48 @@ const name = (id: string) =>
     <div class="space-y-5">
       <fieldset class="m-0 min-w-0 space-y-2 border-0 p-0">
         <legend class="mb-2 p-0 font-medium">{{ text('destination') }}</legend>
-        <label v-if="!s.firstSetup" class="flex gap-2"
+        <label v-if="s.updateEnvironments.length" class="flex gap-2"
           ><input
             v-model="s.state.draft.mode"
             type="radio"
             class="size-4 appearance-auto"
             value="update"
             :disabled="!s.editable"
+            @change="
+              s.chooseUpdateEnvironment(
+                s.firstSetup ? s.updateEnvironments[0].id : s.state.targetId
+              )
+            "
           />{{ text('updateEnvironment') }}</label
-        ><label class="flex gap-2"
+        >
+        <label v-if="s.state.draft.mode === 'update'" class="block text-xs">
+          {{ text('updateTarget') }}
+          <select
+            :value="s.state.targetId"
+            :disabled="!s.editable"
+            class="mt-1 w-full rounded-sm border border-border-default bg-base-background p-2 text-sm"
+            @change="
+              s.chooseUpdateEnvironment(
+                ($event.target as HTMLSelectElement).value
+              )
+            "
+          >
+            <option
+              v-for="environment in s.updateEnvironments"
+              :key="environment.id"
+              :value="environment.id"
+            >
+              {{ environment.name }} ·
+              {{ text('environmentPickerVersion', environment)
+              }}{{
+                environment.id === s.selectedEnvironment.id
+                  ? ` (${text('environmentCurrent')})`
+                  : ''
+              }}
+            </option>
+          </select>
+        </label>
+        <label class="flex gap-2"
           ><input
             v-model="s.state.draft.mode"
             type="radio"
@@ -44,7 +78,7 @@ const name = (id: string) =>
           }}
         </p>
       </fieldset>
-      <label class="block text-xs"
+      <label v-if="s.state.draft.mode === 'new'" class="block text-xs"
         >{{ text('name')
         }}<input
           v-model="s.state.draft.name"
@@ -65,10 +99,21 @@ const name = (id: string) =>
             type="radio"
             class="size-4 appearance-auto"
             :value="gpu.gpuClass"
-            :aria-label="text('gpuOption', gpu)"
+            :aria-label="
+              text('gpuOption', gpu) +
+              (s.gpuSuggestion?.gpuClass === gpu.gpuClass
+                ? ` (${text('gpuRecommended')})`
+                : '')
+            "
           /><span class="min-w-0 flex-1 text-sm"
             >{{ gpu.label
-            }}<span class="mt-1 block text-xs text-muted-foreground">{{
+            }}<Badge
+              v-if="s.gpuSuggestion?.gpuClass === gpu.gpuClass"
+              variant="compact"
+              severity="info"
+              class="ml-2"
+              >{{ text('gpuRecommended') }}</Badge
+            ><span class="mt-1 block text-xs text-muted-foreground">{{
               text('gpuMemory', { size: gpu.vramGb })
             }}</span></span
           ><span class="text-right text-xs"
@@ -88,18 +133,17 @@ const name = (id: string) =>
       >
         {{ text('unknownGpu') }}
       </p>
-      <p
-        v-if="s.firstSetup"
-        class="m-0 text-xs leading-5 text-muted-foreground"
-      >
+      <p class="m-0 text-xs leading-5 text-muted-foreground">
         {{
-          text('gpuSuggestion', {
-            gpu: s.gpuSuggestion?.label ?? text('unknownGpu'),
-            models:
-              s.state.draft.models
-                .map((value) => modelEntry(value).name)
-                .join(', ') || text('noWorkflowModels')
-          })
+          s.gpuEstimate.unknownCount
+            ? text('gpuSizeUnknown')
+            : s.gpuSuggestion
+              ? text('gpuSuggestion', {
+                  size: s.gpuEstimate.knownGb.toFixed(2)
+                })
+              : text(
+                  s.gpuEstimate.knownCount ? 'gpuSizeTooLarge' : 'gpuNoModels'
+                )
         }}
       </p>
     </div>
@@ -172,9 +216,8 @@ const name = (id: string) =>
         </div>
         <p class="m-0 text-xs leading-5 text-muted-foreground">
           {{
-            s.state.draft.models
-              .map((value) => modelEntry(value).name)
-              .join(', ') || text('noModelsSelected')
+            s.state.draft.models.map(s.modelLabel).join(', ') ||
+            text('noModelsSelected')
           }}
         </p>
       </section>

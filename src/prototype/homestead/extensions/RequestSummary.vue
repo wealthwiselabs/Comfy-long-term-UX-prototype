@@ -2,7 +2,7 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { policyCatalog } from '../../fixtures/policyCatalog'
-import { modelEntry, normalizeModels } from './catalog'
+import { normalizeModels } from './catalog'
 import { useExtensionManagerStore } from './store'
 const s = useExtensionManagerStore()
 const { t } = useI18n()
@@ -40,12 +40,24 @@ const removedModels = computed(() =>
             })
           }}
         </p>
-        <p v-for="id in addedModels" :key="`add-${id}`" class="m-0">
-          {{ text('requestModelAdd', { name: modelEntry(id).name }) }}
-        </p>
-        <p v-for="id in removedModels" :key="`remove-${id}`" class="m-0">
-          {{ text('requestModelRemove', { name: modelEntry(id).name }) }}
-        </p>
+        <i18n-t
+          v-for="id in addedModels"
+          :key="`add-${id}`"
+          tag="p"
+          keypath="extensionPrototype.requestModelAdd"
+          class="m-0"
+        >
+          <template #name>{{ s.modelLabel(id) }}</template>
+        </i18n-t>
+        <i18n-t
+          v-for="id in removedModels"
+          :key="`remove-${id}`"
+          tag="p"
+          keypath="extensionPrototype.requestModelRemove"
+          class="m-0"
+        >
+          <template #name>{{ s.modelLabel(id) }}</template>
+        </i18n-t>
         <p
           v-if="
             !s.changes.length && !addedModels.length && !removedModels.length

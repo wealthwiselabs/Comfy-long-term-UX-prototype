@@ -58,7 +58,7 @@ describe('extension manager panel', () => {
     ).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Next' }))
     expect(
-      screen.getByRole('radio', { name: 'Update this environment' })
+      screen.getByRole('radio', { name: 'Update an existing environment' })
     ).toBeChecked()
     expect(
       screen.getByText('ComfyUI Impact Pack: 8.28.3 → 8.29.1')
@@ -431,7 +431,7 @@ describe('extension manager panel', () => {
     ).toBeInTheDocument()
     expect(within(summary).getByText(/Detail Tweaker XL/)).toBeInTheDocument()
     expect(
-      screen.queryByRole('radio', { name: 'Update this environment' })
+      screen.queryByRole('radio', { name: 'Update an existing environment' })
     ).not.toBeInTheDocument()
     expect(
       screen.queryByRole('heading', { name: 'Review estimated costs' })
@@ -630,7 +630,7 @@ describe('extension manager panel', () => {
       screen.getByRole('radio', { name: 'Create a new environment' })
     ).toBeChecked()
     expect(
-      screen.queryByRole('radio', { name: 'Update this environment' })
+      screen.queryByRole('radio', { name: 'Update an existing environment' })
     ).not.toBeInTheDocument()
     expect(
       screen.getByRole('textbox', { name: 'Environment name' })
@@ -640,14 +640,16 @@ describe('extension manager panel', () => {
       screen.getByRole('radio', { name: 'RTX PRO 6000 · 96 GB' })
     ).toBeInTheDocument()
     expect(
-      screen.getByRole('radio', { name: 'RTX PRO 6000 MIG · 48 GB' })
+      screen.getByRole('radio', {
+        name: 'RTX PRO 6000 MIG · 48 GB (Recommended)'
+      })
     ).toBeInTheDocument()
     expect(
       screen.getByRole('radio', { name: 'H100 SXM · 80 GB' })
     ).toBeInTheDocument()
-    expect(screen.getByText(/Illustrative suggestion:/)).toHaveTextContent(
-      'This demo does not measure VRAM or validate capacity'
-    )
+    expect(
+      screen.getByText(/Based on .* GB of workflow models/)
+    ).toHaveTextContent('Sample estimate; actual GPU memory use varies')
     await user.click(screen.getByRole('button', { name: 'Build environment' }))
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     expect(await screen.findByRole('complementary')).toHaveTextContent(

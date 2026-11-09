@@ -381,20 +381,17 @@ describe('extension prototype commands', () => {
     expect(s.state.draft.packs['comfyui-rmbg']).toBe('2.0.0')
   })
 
-  it('unions inherited models with workflow requirements, normalizes aliases and preserves explicit model edits on retry', () => {
+  it('defaults only Cloud-ready workflow models, preserves inherited dependencies and explicit edits on retry', () => {
     const homestead = useHomesteadStore()
     homestead.active.models = [
       'FLUX.1 dev',
-      'models/flux1-dev-fp8.safetensors',
+      'models/checkpoints/flux1-dev-fp8.safetensors',
       'private.gguf'
     ]
     const s = useExtensionManagerStore()
     s.initialize()
-    expect(s.state.draft.models).toEqual([
-      'flux1-dev-fp8',
-      'acme_hero_lora_v5',
-      'private.gguf'
-    ])
+    expect(s.state.draft.models).toEqual(['flux1-dev-fp8', 'acme_hero_lora_v5'])
+    expect(s.unresolvedWorkflowModels).toEqual(['private.gguf'])
     s.state.draft.models = ['private.gguf', 'detail-tweaker']
     s.failure = true
     s.prepare()
@@ -445,5 +442,110 @@ describe('extension prototype commands', () => {
     expect(s.panel).toBeNull()
     expect(s.inbox).toEqual([])
     expect(s.requestPending).toBe(false)
+  })
+  it('retains simulated file metadata and selection through close, build, apply and reopen', () => {
+    const homestead = useHomesteadStore()
+    homestead.active.models = ['private.gguf']
+    const s = useExtensionManagerStore()
+    s.initialize()
+    expect(s.unresolvedWorkflowModels).toEqual(['private.gguf'])
+    const before = s.packageStorage.knownGb
+    const input = {
+      mode: 'file' as const,
+      filename: '',
+      directory: 'loras',
+      url: '',
+      file: new File([new Uint8Array(1024)], 'private.gguf')
+    }
+    expect(s.addModelImport(input)).toBeNull()
+    const id = 'import:loras/private.gguf'
+    expect(s.state.draft.models).toContain(id)
+    expect(s.unresolvedWorkflowModels).toEqual([])
+    expect(s.packageStorage.knownGb).toBeCloseTo(before + 1024 / 1024 ** 3)
+    expect(s.addModelImport(input)).toBe('modelImportDuplicate')
+    s.panel = null
+    s.edit()
+    expect(s.state.draft.models).toContain(id)
+    s.prepare()
+    vi.advanceTimersByTime(5500)
+    s.dispatch({ type: 'approve' })
+    vi.advanceTimersByTime(1600)
+    s.edit()
+    expect(s.modelDetails(id)).toMatchObject({
+      directory: 'loras',
+      sizeBytes: 1024
+    })
+    expect(s.state.draft.models).toContain(id)
+    s.toggleModel(id, false)
+    expect(s.unresolvedWorkflowModels).toEqual(['private.gguf'])
+    expect(s.importedModels).toHaveLength(1)
+    s.toggleModel(id, true)
+    expect(s.unresolvedWorkflowModels).toEqual([])
+  })
+  it('validates public imports, keeps size unknown, and denies imports under enterprise model restrictions', () => {
+    const s = useExtensionManagerStore()
+    const input = {
+      mode: 'url' as const,
+      filename: 'hero.bin',
+      directory: 'loras',
+      url: 'https://huggingface.co/studio/hero/blob/main/hero.bin',
+      file: null
+    }
+    expect(s.addModelImport({ ...input, directory: '../loras' })).toBe(
+      'modelImportFolderError'
+    )
+    expect(
+      s.addModelImport({ ...input, url: 'http://invalid.test/model' })
+    ).toBe('modelImportUrlError')
+    const unknown = s.packageStorage.unknownCount
+    expect(s.addModelImport(input)).toBeNull()
+    expect(s.packageStorage.unknownCount).toBe(unknown + 1)
+    expect(s.importedModels[0].sourceUri).toBe(
+      'https://huggingface.co/studio/hero/resolve/main/hero.bin'
+    )
+    s.reset('member')
+    const installed = [...s.target.models]
+    s.setEnterpriseCapabilities({ addNodes: true, addModels: false })
+    expect(s.addModelImport(input)).toBe('modelImportDisabled')
+    s.toggleModel('sdxl', true)
+    expect(s.state.draft.models).toEqual(installed)
+    expect(s.importedModels).toEqual([])
+  })
+  it('allows the same filename in different folders while protecting an inherited destination', () => {
+    const s = useExtensionManagerStore()
+    const input = {
+      mode: 'url' as const,
+      filename: 'flux1-dev-fp8.safetensors',
+      directory: 'loras',
+      url: 'https://models.example/private/flux1-dev-fp8.safetensors',
+      file: null
+    }
+    expect(s.addModelImport(input)).toBeNull()
+    expect(s.state.draft.models).toContain(
+      'import:loras/flux1-dev-fp8.safetensors'
+    )
+    expect(s.addModelImport({ ...input, directory: 'checkpoints' })).toBe(
+      'modelImportDuplicate'
+    )
+  })
+  it('keeps old filenames and unmatched private paths raw and unselected, while preserving installed private paths', () => {
+    const homestead = useHomesteadStore()
+    const models = [
+      'detail_tweaker_xl.safetensors',
+      'private/sd_xl_base_1.0.safetensors'
+    ]
+    homestead.active.models = models
+    const s = useExtensionManagerStore()
+    s.initialize()
+    expect(s.workflowModelIds).toEqual(models)
+    expect(s.unresolvedWorkflowModels).toEqual(models)
+    expect(s.state.draft.models).not.toContain('detail-tweaker')
+    expect(s.state.draft.models).not.toContain('sdxl')
+    s.state.environments.studio.models.push(models[1])
+    s.state.draft.models.push(models[1])
+    expect(s.unresolvedWorkflowModels).toEqual([models[0]])
+    s.prepare()
+    expect(s.state.draft.models).toContain(models[1])
+    expect(s.state.draft.models).not.toContain('sdxl')
   })
 })

@@ -1,4 +1,4 @@
-import { normalizeModels } from './catalog'
+import { cloudReadyModel, normalizeModels, recommendGpu } from './catalog'
 
 export interface ExtensionEnvironment {
   id: string
@@ -50,16 +50,24 @@ export function initialState(): ExtensionState {
     phase: 'idle',
     targetId: source.id,
     generation: 0,
-    environments: { studio: source },
+    environments: {
+      studio: source,
+      fast: {
+        id: 'fast',
+        name: 'Lightweight preview',
+        revision: 4,
+        packs: { 'rgthree-comfy': '1.0.2' },
+        models: ['sdxl'],
+        gpu: 'rtx-pro-6000-mig-2g-48gb'
+      }
+    },
     draft: { ...structuredClone(source), mode: 'update' },
     jobs: [],
     sessions: { you: 'studio', teammate: 'studio', unrelated: 'other' }
   }
 }
 export function suggestedGpu(models: string[]) {
-  return models.some((model) => /flux|hidream/i.test(model))
-    ? 'rtx-pro-6000-server'
-    : 'rtx-pro-6000-mig-2g-48gb'
+  return recommendGpu(models).gpu?.gpuClass ?? 'rtx-pro-6000-mig-2g-48gb'
 }
 export function firstEnvironmentState(models: string[]): ExtensionState {
   const cloud: ExtensionEnvironment = {
@@ -79,7 +87,7 @@ export function firstEnvironmentState(models: string[]): ExtensionState {
       name: 'My custom environment',
       mode: 'new',
       packs: {},
-      models: normalizeModels(models),
+      models: normalizeModels(models).filter((value) => cloudReadyModel(value)),
       gpu: suggestedGpu(models)
     },
     jobs: [],

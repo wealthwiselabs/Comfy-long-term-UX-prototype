@@ -5,7 +5,6 @@ import { useClipboard } from '@vueuse/core'
 import { useI18n } from 'vue-i18n'
 import Button from '@/components/ui/button/Button.vue'
 import { policyCatalog } from '../../fixtures/policyCatalog'
-import { modelEntry } from './catalog'
 import { useExtensionManagerStore } from './store'
 import Dialog from '@/components/ui/dialog/Dialog.vue'
 import DialogClose from '@/components/ui/dialog/DialogClose.vue'
@@ -267,11 +266,7 @@ function continueFlow() {
           <p class="m-0 mt-3">
             {{ s.state.draft.name }} ·
             {{ s.selectedGpu?.label ?? text('unknownGpuLabel') }} ·
-            {{
-              s.state.draft.models
-                .map((value) => modelEntry(value).name)
-                .join(', ')
-            }}
+            {{ s.state.draft.models.map(s.modelLabel).join(', ') }}
           </p>
           <p v-for="id in s.changes" :key="id" class="m-0 mt-2">
             {{

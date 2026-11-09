@@ -32,7 +32,7 @@ const packageSizeFixture = {
     'comfyui-rmbg': 0.75
   } satisfies Record<string, number>
 }
-interface ModelEntry {
+export interface ModelEntry {
   id: string
   name: string
   fileName: string
@@ -40,6 +40,8 @@ interface ModelEntry {
   kind: 'checkpoint' | 'lora' | 'encoder' | 'vae' | 'unknown'
   sizeBytes: number | null
   aliases: string[]
+  directory?: string
+  sourceUri?: string
 }
 const sampleFileGb: Record<string, number> = {
   'z_image_turbo_bf16.safetensors': 8,
@@ -54,13 +56,16 @@ const sampleFileGb: Record<string, number> = {
   'ae.safetensors': 0.25,
   'sdxl_vae.safetensors': 0.375
 }
-export const modelCatalogFixture: ModelEntry[] = policyCatalog
-  .filter((item) => item.kind === 'models' && item.allowed)
+const modelDefinitions: ModelEntry[] = policyCatalog
+  .filter((item) => item.kind === 'models')
   .flatMap((item) =>
     (item.files ?? []).map((fileName, index) => ({
       id: index === 0 ? item.id : `${item.id}:${fileName}`,
       name: item.files?.length === 1 ? item.name : `${item.name} · ${fileName}`,
-      fileName,
+      fileName:
+        item.id === 'detail-tweaker'
+          ? 'sdxl-detail_tweaker_xl.safetensors'
+          : fileName,
       publisher: item.publisher,
       kind:
         item.version === 'LoRA' || item.id === 'acme_hero_lora_v5'
@@ -73,25 +78,86 @@ export const modelCatalogFixture: ModelEntry[] = policyCatalog
       sizeBytes: Object.hasOwn(sampleFileGb, fileName)
         ? sampleFileGb[fileName] * GB
         : null,
-      aliases: index === 0 ? [item.id, item.name, fileName] : [fileName]
+      aliases:
+        index === 0
+          ? [
+              item.id,
+              item.name,
+              fileName,
+              ...(item.id === 'detail-tweaker'
+                ? ['sdxl-detail_tweaker_xl.safetensors']
+                : [])
+            ]
+          : [fileName]
     }))
   )
-export function modelEntry(value: string): ModelEntry {
+// A small simulated assets response, independent of workspace policy. Platform's
+// catalog picker only offers OSS rows with a fetchable source (DES-971).
+const cloudModelSources: Record<string, string> = {
+  'z_image_turbo_bf16.safetensors': 'diffusion_models',
+  'flux1-dev-fp8.safetensors': 'checkpoints',
+  'hidream_i1_dev_fp8.safetensors': 'diffusion_models',
+  'sd_xl_base_1.0.safetensors': 'checkpoints',
+  'v1-5-pruned-emaonly-fp16.safetensors': 'checkpoints',
+  'sdxl-detail_tweaker_xl.safetensors': 'loras',
+  'qwen_3_4b.safetensors': 'text_encoders',
+  't5xxl_fp8_e4m3fn.safetensors': 'text_encoders',
+  'clip_l.safetensors': 'text_encoders',
+  'ae.safetensors': 'vae',
+  'sdxl_vae.safetensors': 'vae'
+}
+export const modelCatalogFixture: ModelEntry[] = modelDefinitions.flatMap(
+  (entry) => {
+    const directory = cloudModelSources[entry.fileName]
+    return directory
+      ? [
+          {
+            ...entry,
+            directory,
+            sourceUri: `https://models.example/${directory}/${entry.fileName}`
+          }
+        ]
+      : []
+  }
+)
+function matchesModel(value: string, entry: ModelEntry) {
+  const path = value.trim().replaceAll('\\', '/').toLowerCase()
+  const identities = [entry.id, entry.name, entry.fileName]
+  if (entry.directory) {
+    identities.push(
+      `${entry.directory}/${entry.fileName}`,
+      `models/${entry.directory}/${entry.fileName}`
+    )
+  }
+  // A basename or display alias must never erase a workflow's directory or
+  // substitute a differently named file. Suggestions need an explicit choice.
+  return identities.some((identity) => identity.toLowerCase() === path)
+}
+export function cloudReadyModel(value: string) {
+  return modelCatalogFixture.find((entry) => matchesModel(value, entry))
+}
+export function modelEntry(
+  value: string,
+  imported: ModelEntry[] = []
+): ModelEntry {
   const name = value.trim()
-  const fileName = name.split(/[\\/]/).at(-1) ?? name
+  const path = name.replaceAll('\\', '/')
+  const fileName = path.split('/').at(-1) ?? name
   return (
-    modelCatalogFixture.find(
-      (item) =>
-        item.id.toLowerCase() === name.toLowerCase() ||
-        item.aliases.some(
-          (alias) =>
-            alias.toLowerCase() === name.toLowerCase() ||
-            alias.toLowerCase() === fileName.toLowerCase()
-        )
-    ) ?? {
+    imported.find((item) => item.id === name) ??
+    cloudReadyModel(name) ??
+    modelDefinitions.find((entry) => matchesModel(name, entry)) ?? {
       id: name,
       name: fileName,
       fileName,
+      directory:
+        path.includes('/') && !path.startsWith('import:')
+          ? path
+              .replace(/^models\//, '')
+              .split('/')
+              .slice(0, -1)
+              .join('/')
+          : undefined,
       publisher: '',
       kind: 'unknown',
       sizeBytes: null,
@@ -110,9 +176,12 @@ export function normalizeModels(values: string[]) {
 }
 export function selectedModelStorage(
   values: string[],
-  rate: number | null = null
+  rate: number | null = null,
+  imported: ModelEntry[] = []
 ) {
-  const entries = normalizeModels(values).map(modelEntry)
+  const entries = normalizeModels(values).map((value) =>
+    modelEntry(value, imported)
+  )
   const known = entries.filter(
     (item) =>
       item.sizeBytes !== null &&
@@ -135,12 +204,26 @@ export function catalogGpu(value: string) {
     (item) => item.gpuClass === value || item.label === value
   )
 }
+export function recommendGpu(models: string[], imported: ModelEntry[] = []) {
+  const storage = selectedModelStorage(models, null, imported)
+  const estimatedVramGb = storage.knownCount ? storage.knownGb * 1.5 + 8 : null
+  const gpu =
+    estimatedVramGb !== null && !storage.unknownCount
+      ? computeCatalogFixture
+          .filter((option) => option.vramGb >= estimatedVramGb)
+          .sort(
+            (left, right) => left.pricePerHourUsd - right.pricePerHourUsd
+          )[0]
+      : undefined
+  return { ...storage, estimatedVramGb, gpu }
+}
 export function environmentPackageStorage(
   models: string[],
   packs: Record<string, string>,
-  rate: number | null = null
+  rate: number | null = null,
+  imported: ModelEntry[] = []
 ) {
-  const modelStorage = selectedModelStorage(models)
+  const modelStorage = selectedModelStorage(models, null, imported)
   const packSizes: Record<string, number> = packageSizeFixture.packGb
   const packIds = Object.keys(packs)
   const knownPacks = packIds.filter((id) => Object.hasOwn(packSizes, id))

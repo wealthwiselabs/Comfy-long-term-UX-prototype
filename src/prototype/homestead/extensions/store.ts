@@ -7,16 +7,26 @@ import {
   canRun,
   firstEnvironmentState,
   initialState,
-  suggestedGpu,
   transition
 } from './model'
 import type { ExtensionEvent, ExtensionEnvironment } from './model'
 import type { Environment, Workflow } from '../model'
 import { demoWorkflowGraph } from '../../fixtures/demoWorkflowGraphs'
 import { preparationStages } from './preparation'
+import type { ModelEntry } from './catalog'
+import {
+  isModelDirectory,
+  isModelFilename,
+  modelImportUrl
+} from './modelImport'
+import type { ModelImportInput } from './modelImport'
 import {
   catalogGpu,
+  cloudReadyModel,
+  modelEntry,
+  modelCatalogFixture,
   normalizeModels,
+  recommendGpu,
   environmentPackageStorage,
   storageCatalogFixture
 } from './catalog'
@@ -61,16 +71,116 @@ export const useExtensionManagerStore = defineStore(
         state.value.targetId === 'dep-comfy-cloud' &&
         state.value.phase !== 'updated'
     )
-    const gpuSuggestion = computed(() =>
-      catalogGpu(suggestedGpu(state.value.draft.models))
-    )
     const selectedGpu = computed(() => catalogGpu(state.value.draft.gpu))
     const workflowModelIds = ref<string[]>([])
+    const importedModels = ref<ModelEntry[]>([])
+    function workflowImportedModel(id: string) {
+      return importedModels.value.find(
+        (entry) =>
+          state.value.draft.models.includes(entry.id) &&
+          entry.fileName.toLowerCase() ===
+            modelEntry(id).fileName.toLowerCase() &&
+          (!/[\\/]/.test(id) ||
+            `${entry.directory}/${entry.fileName}`.toLowerCase() ===
+              id
+                .replaceAll('\\', '/')
+                .replace(/^models\//, '')
+                .toLowerCase())
+      )
+    }
+    const gpuEstimate = computed(() =>
+      recommendGpu(
+        workflowModelIds.value.map((id) => workflowImportedModel(id)?.id ?? id),
+        importedModels.value
+      )
+    )
+    const gpuSuggestion = computed(() => gpuEstimate.value.gpu)
+    const modelDetails = (id: string) =>
+      cloudReadyModel(id) ?? modelEntry(id, importedModels.value)
+    const modelLabel = (id: string) => {
+      const entry = modelDetails(id)
+      return importedModels.value.some((model) => model.id === id)
+        ? `models/${entry.directory}/${entry.fileName}`
+        : entry.name
+    }
+    const unresolvedWorkflowModels = computed(() =>
+      workflowModelIds.value.filter((id) => {
+        if (
+          cloudReadyModel(id) ||
+          normalizeModels(target.value.models).includes(modelEntry(id).id)
+        )
+          return false
+        return !workflowImportedModel(id)
+      })
+    )
+    function addModelImport(input: ModelImportInput): string | null {
+      if (!editable.value || !canAddModels.value) return 'modelImportDisabled'
+      const filename =
+        input.mode === 'file' ? (input.file?.name ?? '') : input.filename.trim()
+      const directory = input.directory.trim()
+      if (!isModelFilename(filename)) return 'modelImportFilenameError'
+      if (!isModelDirectory(directory)) return 'modelImportFolderError'
+      const sourceUri =
+        input.mode === 'url' ? modelImportUrl(input.url) : undefined
+      if (input.mode === 'url' && !sourceUri) return 'modelImportUrlError'
+      if (input.mode === 'file' && (!input.file || input.file.size <= 0))
+        return 'modelImportEmptyError'
+      const id = `import:${directory}/${filename}`
+      if (
+        [
+          ...modelCatalogFixture,
+          ...importedModels.value,
+          ...target.value.models.map(modelDetails)
+        ].some(
+          (entry) =>
+            entry.fileName.toLowerCase() === filename.toLowerCase() &&
+            (entry.directory === undefined ||
+              entry.directory.toLowerCase() === directory.toLowerCase())
+        )
+      )
+        return 'modelImportDuplicate'
+      const kind: ModelEntry['kind'] =
+        directory === 'loras'
+          ? 'lora'
+          : directory === 'text_encoders'
+            ? 'encoder'
+            : directory === 'vae'
+              ? 'vae'
+              : ['checkpoints', 'diffusion_models'].includes(directory)
+                ? 'checkpoint'
+                : 'unknown'
+      importedModels.value.push({
+        id,
+        name: filename,
+        fileName: filename,
+        directory,
+        sourceUri: sourceUri ?? undefined,
+        publisher: '',
+        kind,
+        aliases: [id],
+        sizeBytes: input.mode === 'file' ? input.file!.size : null
+      })
+      state.value.draft.models = [...new Set([...state.value.draft.models, id])]
+      return null
+    }
+    function toggleModel(id: string, on: boolean) {
+      if (!editable.value || !canAddModels.value) return
+      if (
+        !cloudReadyModel(id) &&
+        !importedModels.value.some((entry) => entry.id === id) &&
+        !normalizeModels(target.value.models).includes(modelEntry(id).id)
+      )
+        return
+      state.value.draft.models = on
+        ? [...new Set([...state.value.draft.models, id])]
+        : state.value.draft.models.filter((value) => value !== id)
+    }
     const packageStorage = computed(() =>
       environmentPackageStorage(
         state.value.draft.models,
         state.value.draft.packs,
-        storageCatalogFixture.pricePerGbMonthUsd
+        storageCatalogFixture.pricePerGbMonthUsd,
+        importedModels.value
       )
     )
     const role = ref<'admin' | 'member'>('admin')
@@ -121,6 +231,56 @@ export const useExtensionManagerStore = defineStore(
         ? [extensionEnvironment(cloud), ...managed]
         : managed
     })
+    const updateEnvironments = computed(() =>
+      availableEnvironments.value
+        .filter((environment) => environment.id !== 'dep-comfy-cloud')
+        .sort(
+          (left, right) =>
+            Number(right.id === selectedEnvironment.value.id) -
+            Number(left.id === selectedEnvironment.value.id)
+        )
+    )
+    function chooseUpdateEnvironment(id: string) {
+      if (!editable.value || role.value !== 'admin') return
+      const environment = updateEnvironments.value.find(
+        (item) => item.id === id
+      )
+      if (!environment) return
+      const previous = target.value
+      const draft = state.value.draft
+      const packs = { ...environment.packs }
+      for (const packId of changes.value) {
+        if (draft.packs[packId]) packs[packId] = draft.packs[packId]
+        else delete packs[packId]
+      }
+      const previousModels = normalizeModels(previous.models)
+      const draftModels = normalizeModels(draft.models)
+      const removedModels = previousModels.filter(
+        (model) => !draftModels.includes(model)
+      )
+      const addedModels = draftModels.filter(
+        (model) => !previousModels.includes(model)
+      )
+      const workflowDefaults = normalizeModels(workflowModelIds.value).filter(
+        (model) => draftModels.includes(model)
+      )
+      state.value.targetId = id
+      state.value.draft = {
+        ...draft,
+        mode: 'update',
+        name: environment.name,
+        gpu: draft.gpu === previous.gpu ? environment.gpu : draft.gpu,
+        packs,
+        models: normalizeModels([
+          ...environment.models.filter(
+            (model) => !removedModels.includes(modelEntry(model).id)
+          ),
+          ...addedModels,
+          ...workflowDefaults
+        ])
+      }
+      state.value.phase = 'idle'
+    }
     const needsIntro = computed(
       () =>
         !introAccepted.value &&
@@ -336,6 +496,7 @@ export const useExtensionManagerStore = defineStore(
     function draftSnapshot() {
       const draft = state.value.draft
       return JSON.stringify({
+        targetId: state.value.targetId,
         name: draft.name,
         mode: draft.mode,
         gpu: draft.gpu,
@@ -388,11 +549,20 @@ export const useExtensionManagerStore = defineStore(
       ]
     }
     function seedModelDefaults() {
-      workflowModelIds.value = normalizeModels(workflowModels(homestead.active))
+      workflowModelIds.value = [
+        ...new Set(
+          workflowModels(homestead.active)
+            .map((value) => value.trim())
+            .filter(Boolean)
+        )
+      ]
       state.value.draft.models = canAddModels.value
         ? normalizeModels([
             ...state.value.draft.models,
-            ...workflowModelIds.value
+            ...workflowModelIds.value.flatMap((value) => {
+              const entry = cloudReadyModel(value)
+              return entry ? [entry.id] : []
+            })
           ])
         : [...target.value.models]
     }
@@ -421,6 +591,7 @@ export const useExtensionManagerStore = defineStore(
       timers.forEach(clearTimeout)
       timers.clear()
       introAccepted.value = false
+      importedModels.value = []
       enterpriseCapabilities.value = { addNodes: true, addModels: true }
       preparationStep.value = -1
       state.value =
@@ -497,8 +668,15 @@ export const useExtensionManagerStore = defineStore(
       firstSetup,
       continueFromIntro,
       gpuSuggestion,
+      gpuEstimate,
       selectedGpu,
       workflowModelIds,
+      importedModels,
+      modelDetails,
+      modelLabel,
+      unresolvedWorkflowModels,
+      addModelImport,
+      toggleModel,
       packageStorage,
       role,
       requestNote,
@@ -510,6 +688,8 @@ export const useExtensionManagerStore = defineStore(
       changes,
       selectedEnvironment,
       availableEnvironments,
+      updateEnvironments,
+      chooseUpdateEnvironment,
       selectEnvironment,
       locked,
       editable,
