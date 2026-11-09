@@ -66,7 +66,7 @@ export function initialState(): ExtensionState {
     sessions: { you: 'studio', teammate: 'studio', unrelated: 'other' }
   }
 }
-export function suggestedGpu(models: string[]) {
+function suggestedGpu(models: string[]) {
   return recommendGpu(models).gpu?.gpuClass ?? 'rtx-pro-6000-mig-2g-48gb'
 }
 export function firstEnvironmentState(models: string[]): ExtensionState {
